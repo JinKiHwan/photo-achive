@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/earlyaccess/nanumpenscript.css');
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #0f0f11;
+    --bg-secondary: #17171a;
+    --text-primary: #f3f3f5;
+    --text-secondary: #a1a1aa;
+    --accent: #e4e4e7;
+    --border: #27272a;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    background-image: url("/images/bg-mo.webp");
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center top;
+    background-attachment: fixed;
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Pretendard", "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.015em;
+    overflow-x: hidden;
+  }
+
+  @media (min-width: 768px) {
+    body {
+      background-image: url("/images/bg-pc.webp");
+    }
+  }
+
+  /* Custom subtle scrollbar for photobook feel */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0f0f11;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+  }
+}
+
+/* Serif font style for photobook titles */
+.font-serif-book {
+  font-family: "Cormorant Garamond", "Noto Serif KR", Georgia, serif;
+}
+
+/* Handwritten Nanum Pen Script font for polaroid card titles */
+.font-handwriting {
+  font-family: 'Nanum Pen Script', cursive, sans-serif;
+}
+
+/* Smooth fade mask for cover photos */
+.image-mask-gradient {
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 75%, rgba(0,0,0,0));
+}
