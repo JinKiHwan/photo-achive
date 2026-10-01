@@ -1,0 +1,146 @@
+.book {
+  position: relative;
+  height: calc(100svh + var(--steps) * 70svh);
+  background: #101010;
+  color: #fff;
+}
+.book:focus { outline: none; }
+.book:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+.viewport {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: max(80px, 9svh);
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  --thumb-width: clamp(96px, 9vw, 140px);
+  --thumb-height: clamp(80px, 14svh, 148px);
+  --thumb-gap: clamp(16px, 2vw, 32px);
+}
+.background { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.backgroundPhoto {
+  position: absolute;
+  inset: -40px;
+  z-index: 0;
+}
+.backgroundPhoto > img { z-index: 0; }
+.cover { object-fit: cover; }
+/* Blur the image inside its own animated layer, then tint it with black. */
+.backgroundPhoto::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background-color: rgba(0, 0, 0, 0.52);
+  -webkit-backdrop-filter: blur(36px);
+  backdrop-filter: blur(36px);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .backgroundPhoto > img { filter: blur(36px); }
+}
+.back {
+  position: absolute;
+  top: max(24px, env(safe-area-inset-top));
+  left: max(24px, env(safe-area-inset-left));
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 50%;
+  background: rgb(0 0 0 / 20%);
+  backdrop-filter: blur(12px);
+  transition: background 180ms;
+}
+.back:hover { background: rgb(255 255 255 / 15%); }
+.back:focus-visible, .thumbnail:focus-visible { outline: 2px solid #fff; outline-offset: 5px; }
+.stage {
+  position: relative;
+  z-index: 3;
+  width: min(76vw, 1100px);
+  container-type: size;
+  flex: 1;
+  min-height: 0;
+  margin-bottom: clamp(24px, 5svh, 60px);
+}
+.photo { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; }
+.polaroid {
+  margin: 0;
+  --frame: clamp(8px, .7vw, 12px);
+  --metadata-height: clamp(60px, 8svh, 80px);
+  width: min(100cqw, calc((100cqh - var(--metadata-height) - var(--frame) * 2) * var(--photo-ratio) + var(--frame) * 2));
+  padding: var(--frame);
+  background: #fff;
+  color: #292724;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 28%), 0 2px 5px rgb(0 0 0 / 12%);
+}
+.printImage { position: relative; width: 100%; aspect-ratio: var(--photo-ratio); overflow: hidden; }
+.mainImage { object-fit: contain; }
+.metadata {
+  height: var(--metadata-height);
+  display: grid;
+  align-items: center;
+  padding: 8px 2px 0;
+  overflow: auto;
+}
+.exifValues { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px clamp(10px, 2vw, 30px); margin: 0; text-align: center; }
+.exifValues dt { color: #8b8781; font-size: 9px; line-height: 1.4; }
+.exifValues dd { margin: 4px 0 0; color: #44403c; font-size: 12px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.empty { position: absolute; inset: 0; display: grid; place-items: center; color: #d4d4d8; font-size: 14px; }
+.filmstrip { position: relative; z-index: 3; width: 100%; flex-shrink: 0; padding: 8px 0; overflow: clip; }
+.track {
+  display: flex;
+  width: max-content;
+  gap: var(--thumb-gap);
+  transform: translateX(calc(50vw - var(--thumb-width) / 2 - var(--active-index) * (var(--thumb-width) + var(--thumb-gap))));
+  transition: transform 550ms cubic-bezier(.22, 1, .36, 1);
+}
+.thumbnail {
+  position: relative;
+  flex: 0 0 var(--thumb-width);
+  width: var(--thumb-width);
+  height: var(--thumb-height);
+  padding: 0;
+  border: 0;
+  background: #242424;
+  cursor: pointer;
+  opacity: .5;
+  transform: scale(.94);
+  transition: opacity 350ms, transform 350ms, box-shadow 350ms;
+}
+.thumbnail:hover { opacity: .85; }
+.thumbnail[aria-current="true"] { opacity: 1; transform: scale(1); box-shadow: 0 0 0 3px #fff; }
+.caption {
+  position: relative;
+  z-index: 3;
+  width: min(88vw, 800px);
+  height: clamp(42px, 6svh, 60px);
+  flex-shrink: 0;
+  text-align: center;
+  padding-top: 18px;
+  color: rgb(255 255 255 / 65%);
+  font-size: 12px;
+}
+.counter { font-variant-numeric: tabular-nums; font-size: 10px; letter-spacing: .2em; }
+.caption p { margin-top: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 700px) {
+  .viewport { --thumb-width: 80px; --thumb-height: 88px; --thumb-gap: 14px; padding-top: 84px; }
+  .stage { width: 92vw; margin-bottom: 28px; }
+  .back { top: max(18px, env(safe-area-inset-top)); left: 18px; }
+}
+@media (max-height: 500px) {
+  .viewport { padding-top: 20px; padding-bottom: 8px; --thumb-height: 52px; --thumb-width: 64px; }
+  .stage { width: 72vw; margin-bottom: 12px; }
+  .caption { height: 28px; padding-top: 5px; }
+  .polaroid { --frame: 8px; --metadata-height: 58px; }
+  .metadata { padding-top: 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .track, .thumbnail, .back { transition: none; }
+}

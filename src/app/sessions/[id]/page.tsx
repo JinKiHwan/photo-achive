@@ -1,6 +1,6 @@
 import React from "react";
 import { notFound } from "next/navigation";
-import { fetchSessionByIdOrSlug, fetchSessions } from "@/lib/db";
+import { fetchSessionByIdOrSlug } from "@/lib/db";
 import { PhotobookViewer } from "@/components/detail/PhotobookViewer";
 import { Metadata } from "next";
 
@@ -32,23 +32,5 @@ export default async function SessionDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  // Get all published sessions to determine previous / next navigation
-  const allSessions = await fetchSessions(true);
-  const currentIndex = allSessions.findIndex(
-    (s) => s.id === session.id || s.slug === session.slug
-  );
-
-  const prevSession = currentIndex > 0 ? allSessions[currentIndex - 1] : null;
-  const nextSession =
-    currentIndex >= 0 && currentIndex < allSessions.length - 1
-      ? allSessions[currentIndex + 1]
-      : null;
-
-  return (
-    <PhotobookViewer
-      session={session}
-      prevSession={prevSession}
-      nextSession={nextSession}
-    />
-  );
+  return <PhotobookViewer key={session.id} session={session} />;
 }

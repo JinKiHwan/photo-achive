@@ -10,6 +10,8 @@ export const Header: React.FC = () => {
   const pathname = usePathname();
   const { isAdmin, logout } = useAuth();
 
+  if (pathname.startsWith("/sessions/")) return null;
+
   // If on main page, user explicitly requested "헤더는 필요없어"
   // Provide only a subtle floating admin button on top-right if needed
   if (pathname === "/") {

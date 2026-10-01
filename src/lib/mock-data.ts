@@ -1,6 +1,6 @@
 import { PhotoSession } from "@/types";
 
-export const INITIAL_MOCK_SESSIONS: PhotoSession[] = [
+const MOCK_SESSION_BASE: PhotoSession[] = [
   {
     id: "seochon-autumn-walk-2025",
     slug: "seochon-autumn-walk-2025",
@@ -622,3 +622,22 @@ export const INITIAL_MOCK_SESSIONS: PhotoSession[] = [
     ]
   }
 ];
+
+// Reuse existing sample assets to give every demo gallery three distinct photos.
+// These are UI fixtures, not additional photographs from the named locations.
+export const INITIAL_MOCK_SESSIONS: PhotoSession[] = MOCK_SESSION_BASE.map((session, index) => ({
+  ...session,
+  photos: [
+    ...session.photos,
+    ...[1, 2].map((offset) => {
+      const sample = MOCK_SESSION_BASE[(index + offset) % MOCK_SESSION_BASE.length].photos[0];
+      return {
+        id: `${session.id}-sample-${offset + 1}`,
+        order: session.photos.length + offset - 1,
+        caption: `전환 확인용 샘플 사진 ${offset + 1}`,
+        urls: { ...sample.urls },
+        aspectRatio: sample.aspectRatio,
+      };
+    }),
+  ],
+}));
