@@ -21,6 +21,7 @@ export default function GlobeView({ sessions }: { sessions: PhotoSession[] }) {
     return gps ? [{ ...gps, id: session.id, title: session.title }] : [];
   }), [sessions]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [overviewRequest, setOverviewRequest] = useState(0);
   const active = sessions.find(session => session.id === activeId);
   const gps = active ? sessionGps(active) : undefined;
   return <section id="globe-panel" role="tabpanel" aria-labelledby="globe-tab" className="w-full space-y-5">
@@ -38,8 +39,8 @@ export default function GlobeView({ sessions }: { sessions: PhotoSession[] }) {
     </SessionStrip>
     <div className="overflow-hidden rounded-2xl border border-white/15 bg-zinc-950/35 shadow-[0_20px_70px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
       <div className="relative isolate">
-        <GlobeBoundary><GlobeScene points={points} activeId={activeId} onSelect={setActiveId} /></GlobeBoundary>
-        <button type="button" onClick={() => setActiveId(null)} className="absolute right-4 top-4 z-10 rounded-full border border-white/20 bg-black/20 px-4 py-2 text-xs text-zinc-200 backdrop-blur-md transition hover:border-white/40 hover:bg-black/30 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:right-5 sm:top-5">지구 전체 보기</button>
+        <GlobeBoundary><GlobeScene points={points} activeId={activeId} overviewRequest={overviewRequest} onSelect={setActiveId} /></GlobeBoundary>
+        <button type="button" onClick={() => { setActiveId(null); setOverviewRequest(value => value + 1); }} className="absolute right-4 top-4 z-10 rounded-full border border-white/20 bg-black/20 px-4 py-2 text-xs text-zinc-200 backdrop-blur-md transition hover:border-white/40 hover:bg-black/30 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:right-5 sm:top-5">지구 전체 보기</button>
       </div>
       <div aria-live="polite" className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-black/10 p-5">
         <div><p className="text-sm text-zinc-100">{active?.title ?? "사진으로 기록한 지구"}</p><p className="mt-1 text-xs text-zinc-400">{active ? gps ? `${active.location} · ${gps.latitude.toFixed(4)}, ${gps.longitude.toFixed(4)}${gps.source === "demo" ? " · 임시 예시 좌표" : ""}` : "이 사진글에는 GPS가 없습니다. 편집 화면에서 위치를 추가해 주세요." : points.length ? "사진글을 선택하면 해당 장소까지 확대합니다. 드래그와 스크롤로 이동할 수 있습니다." : "등록된 촬영 좌표가 없습니다. 사진 업로드 또는 글 편집에서 위치를 추가해 주세요."}</p></div>

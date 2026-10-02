@@ -7,13 +7,14 @@ import { GeoLocation } from "@/types";
 
 export type GlobePoint = GeoLocation & { id: string; title: string };
 const streetTiles = (x: number, y: number, level: number) => `https://tile.openstreetmap.org/${level}/${x}/${y}.png`;
-export default function GlobeScene({ points, activeId, onSelect }: { points: GlobePoint[]; activeId: string | null; onSelect: (id: string) => void }) {
+export default function GlobeScene({ points, activeId, overviewRequest, onSelect }: { points: GlobePoint[]; activeId: string | null; overviewRequest: number; onSelect: (id: string) => void }) {
   const ref = useRef<GlobeMethods | undefined>(undefined);
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
   const [ready, setReady] = useState(false);
   const [detailedId, setDetailedId] = useState<string | null>(null);
   const [transition, setTransition] = useState<{ image: string; id: string; fading: boolean } | null>(null);
+  const showDetails = activeId ? detailedId === activeId : overviewRequest === 0;
   const [material] = useState(() => new MeshPhongMaterial({ color: "#ffffff", shininess: 18, specular: "#263b4e" }));
   useEffect(() => () => material.dispose(), [material]);
   useEffect(() => {
@@ -41,11 +42,16 @@ export default function GlobeScene({ points, activeId, onSelect }: { points: Glo
     globe.controls().minDistance = globe.getGlobeRadius() * 1.0003;
     globe.controls().maxDistance = globe.getGlobeRadius() * 5;
     const point = points.find(p => p.id === activeId);
-    globe.controls().autoRotate = !point;
+    globe.controls().autoRotate = false;
     globe.controls().autoRotateSpeed = 0.35;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) globe.controls().autoRotate = false;
-    if (!point) { globe.pointOfView({ lat: 25, lng: 125, altitude: 2.2 }, reduced ? 0 : 1000); return; }
+    if (!point) {
+      globe.pointOfView(overviewRequest > 0
+        ? { lat: 25, lng: 125, altitude: 2.2 }
+        : { lat: 36.5, lng: 127.8, altitude: 0.12 }, reduced ? 0 : 1000);
+      return;
+    }
     const target = { lat: point.latitude, lng: point.longitude, altitude: 0.002 };
     const revealDetails = () => {
       if (!reduced) {
@@ -72,7 +78,7 @@ export default function GlobeScene({ points, activeId, onSelect }: { points: Glo
     const controls = globe.controls();
     controls.addEventListener("start", onInteraction);
     return () => { interrupt(); controls.removeEventListener("start", onInteraction); };
-  }, [activeId, points, ready]);
+  }, [activeId, points, ready, overviewRequest]);
   useEffect(() => {
     if (!activeId || detailedId !== activeId) return;
     const started = performance.now();
@@ -131,15 +137,15 @@ export default function GlobeScene({ points, activeId, onSelect }: { points: Glo
     return anchor;
   }, [activeId, onSelect]);
   return <div ref={container} className="w-full" aria-label="촬영 위치를 표시한 3D 지구본">
-    <div className="relative" data-view={activeId && detailedId === activeId ? "details" : "earth"}>
+    <div className="relative" data-view={showDetails ? "details" : "earth"}>
     <Globe ref={ref} width={width} height={Math.min(620, Math.max(380, width * 0.58))}
       backgroundColor="rgba(0,0,0,0)" globeImageUrl="/images/globe/earth-blue-marble.jpg"
-      globeMaterial={material} globeTileEngineUrl={activeId && detailedId === activeId ? streetTiles : null}
+      globeMaterial={material} globeTileEngineUrl={showDetails ? streetTiles : null}
       globeCurvatureResolution={2} atmosphereColor="#769eda" atmosphereAltitude={0.12} animateIn={false} waitForGlobeReady={false}
       onGlobeReady={() => setReady(true)} htmlElementsData={points} htmlLat="latitude" htmlLng="longitude"
       htmlAltitude={0} htmlElement={createPin} htmlTransitionDuration={0} />
       {transition?.id === activeId && <div aria-hidden="true" className="pointer-events-none absolute inset-0 transition-opacity duration-1000 motion-reduce:transition-none" style={{ backgroundImage: `url(${transition.image})`, backgroundSize: "100% 100%", opacity: transition.fading ? 0 : 1 }} onTransitionEnd={() => setTransition(null)} />}
-      {activeId && detailedId === activeId && <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap 지도 출처" className="absolute bottom-2 right-3 rounded bg-black/35 px-2 py-1 text-[10px] text-white/65 backdrop-blur-sm">© OpenStreetMap contributors</a>}
+      {showDetails && <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" aria-label="OpenStreetMap 지도 출처" className="absolute bottom-2 right-3 rounded bg-black/35 px-2 py-1 text-[10px] text-white/65 backdrop-blur-sm">© OpenStreetMap contributors</a>}
     </div>
   </div>;
 }

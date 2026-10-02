@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { PhotoSession } from "@/types";
 import { formatAperture, formatPhotoFocalLength } from "@/lib/photo-metadata";
@@ -15,12 +15,24 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
   const [imageRatios, setImageRatios] = useState<Record<string, number>>({});
   const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const rootRef = useRef<HTMLElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
   const activePhoto = photos[activeIndex] || photos[0];
   const activeSource = activePhoto?.urls.large || activePhoto?.urls.medium || "";
   const nextPhoto = photos[activeIndex + 1];
+
+  useEffect(() => {
+    if (!expanded) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialog.showModal();
+    return () => { dialog.close(); document.body.style.overflow = previousOverflow; };
+  }, [expanded]);
 
   // Native page scrolling also supports touch, trackpads and restored scroll positions.
   useEffect(() => {
@@ -62,6 +74,7 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (expanded) return;
     const target = event.target as HTMLElement;
     if (target.closest("a")) return;
     const index = event.key === "ArrowRight" ? activeIndex + 1
@@ -127,6 +140,7 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
                   visibility: loadedImages[activeSource] ? "visible" : "hidden",
                 } as CSSProperties}>
                   <div className={styles.printImage}>
+                    <button type="button" className={styles.expandPhoto} aria-label="현재 사진 크게 보기" onClick={() => setExpanded(true)}>
                     <Image
                       src={activePhoto.urls.large || activePhoto.urls.medium}
                       alt={activePhoto.caption || `${session.title} — ${activeIndex + 1}번째 사진`}
@@ -142,6 +156,7 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
                       }}
                       onError={() => setFailedImages(current => ({...current, [activeSource]: true}))}
                     />
+                    </button>
                   </div>
                   <figcaption className={styles.metadata}>
                     <p className={styles.cameraLine}><span>Shot on </span><strong>{activePhoto.exif?.camera || session.camera || "-"}</strong></p>
@@ -180,6 +195,15 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
           </>
         )}
       </div>
+      {expanded && activePhoto && (
+        <dialog ref={dialogRef} className={styles.lightbox} aria-label="사진 크게 보기"
+          onCancel={() => setExpanded(false)} onClick={event => { if (event.target === event.currentTarget) setExpanded(false); }}>
+          <button type="button" autoFocus className={styles.closeLightbox} aria-label="확대 보기 닫기" onClick={() => setExpanded(false)}><X size={24} /></button>
+          <div className={styles.expandedImage}>
+            <Image src={activeSource} alt={activePhoto.caption || session.title} fill sizes="100vw" loading="eager" className={styles.mainImage} />
+          </div>
+        </dialog>
+      )}
     </section>
   );
 }
