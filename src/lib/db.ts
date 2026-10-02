@@ -1,5 +1,6 @@
 import { PhotoSession, PhotoItem } from "@/types";
 import { INITIAL_MOCK_SESSIONS } from "./mock-data";
+import { withDemoCoordinates } from "./demo-locations";
 import { db, storage, isFirebaseConfigured } from "./firebase";
 import {
   collection,
@@ -12,7 +13,7 @@ import {
   orderBy,
   where,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { CompressedImageSet } from "./image-processor";
 
 const LOCAL_STORAGE_KEY = "photo_archive_sessions_v2";
@@ -26,7 +27,12 @@ function getLocalSessions(): PhotoSession[] {
     return INITIAL_MOCK_SESSIONS;
   }
   try {
-    return JSON.parse(stored);
+    const sessions: PhotoSession[] = JSON.parse(stored);
+    const seeded = sessions.map(withDemoCoordinates);
+    if (seeded.some((session, index) => session !== sessions[index])) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(seeded));
+    }
+    return seeded;
   } catch {
     return INITIAL_MOCK_SESSIONS;
   }
@@ -40,6 +46,7 @@ function saveLocalSessions(sessions: PhotoSession[]) {
 
 // Fetch all sessions
 export async function fetchSessions(onlyPublished = false): Promise<PhotoSession[]> {
+  if (isFirebaseConfigured && !db) throw new Error("Firebase 데이터베이스 연결에 실패했습니다.");
   if (isFirebaseConfigured && db) {
     try {
       const colRef = collection(db, "sessions");
@@ -53,7 +60,7 @@ export async function fetchSessions(onlyPublished = false): Promise<PhotoSession
       });
       return list;
     } catch (err) {
-      console.warn("Firestore fetch error, fallback to local:", err);
+      throw err;
     }
   }
 
@@ -65,6 +72,7 @@ export async function fetchSessions(onlyPublished = false): Promise<PhotoSession
 
 // Fetch single session by id or slug
 export async function fetchSessionByIdOrSlug(idOrSlug: string): Promise<PhotoSession | null> {
+  if (isFirebaseConfigured && !db) throw new Error("Firebase 데이터베이스 연결에 실패했습니다.");
   if (isFirebaseConfigured && db) {
     try {
       // 1. Try doc by ID
@@ -74,14 +82,15 @@ export async function fetchSessionByIdOrSlug(idOrSlug: string): Promise<PhotoSes
         return { id: docSnap.id, ...docSnap.data() } as PhotoSession;
       }
       // 2. Query doc by slug
-      const q = query(collection(db, "sessions"), where("slug", "==", idOrSlug));
+      const q = query(collection(db, "sessions"), where("slug", "==", idOrSlug), where("isPublished", "==", true));
       const qSnap = await getDocs(q);
       if (!qSnap.empty) {
         const first = qSnap.docs[0];
         return { id: first.id, ...first.data() } as PhotoSession;
       }
+      return null;
     } catch (err) {
-      console.warn("Firestore get doc error, fallback to local:", err);
+      throw err;
     }
   }
 
@@ -97,13 +106,14 @@ export async function saveSession(session: PhotoSession): Promise<void> {
     updatedAt: new Date().toISOString(),
   };
 
+  if (isFirebaseConfigured && !db) throw new Error("Firebase 데이터베이스 연결에 실패했습니다.");
   if (isFirebaseConfigured && db) {
     try {
       const docRef = doc(db, "sessions", updatedSession.id);
       await setDoc(docRef, updatedSession, { merge: true });
       return;
     } catch (err) {
-      console.warn("Firestore save error, saving locally:", err);
+      throw err;
     }
   }
 
@@ -120,12 +130,13 @@ export async function saveSession(session: PhotoSession): Promise<void> {
 
 // Delete Session
 export async function deleteSession(id: string): Promise<void> {
+  if (isFirebaseConfigured && !db) throw new Error("Firebase 데이터베이스 연결에 실패했습니다.");
   if (isFirebaseConfigured && db) {
     try {
       await deleteDoc(doc(db, "sessions", id));
       return;
     } catch (err) {
-      console.warn("Firestore delete error, removing locally:", err);
+      throw err;
     }
   }
 
@@ -140,15 +151,18 @@ export async function uploadPhotoImages(
   photoId: string,
   compressed: CompressedImageSet
 ): Promise<{ urls: PhotoItem["urls"]; storagePaths: PhotoItem["storagePaths"] }> {
+  if (isFirebaseConfigured && !storage) throw new Error("Firebase 사진 저장소 연결에 실패했습니다.");
   if (isFirebaseConfigured && storage) {
     const basePath = `sessions/${sessionId}/${photoId}`;
     const thumbRef = ref(storage, `${basePath}/thumb.webp`);
     const medRef = ref(storage, `${basePath}/medium.webp`);
     const largeRef = ref(storage, `${basePath}/large.webp`);
 
-    await uploadBytes(thumbRef, compressed.thumb);
-    await uploadBytes(medRef, compressed.medium);
-    await uploadBytes(largeRef, compressed.large);
+    // Each upload gets a new photoId, so replacements use new URLs.
+    const metadata = { contentType: "image/webp", cacheControl: "private, max-age=2678400, immutable" };
+    await uploadBytes(thumbRef, compressed.thumb, metadata);
+    await uploadBytes(medRef, compressed.medium, metadata);
+    await uploadBytes(largeRef, compressed.large, metadata);
 
     const thumbUrl = await getDownloadURL(thumbRef);
     const medUrl = await getDownloadURL(medRef);

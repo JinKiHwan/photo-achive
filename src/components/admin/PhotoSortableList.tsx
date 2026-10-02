@@ -1,9 +1,21 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+import { LocationPicker } from "./LocationPicker";
+import { formatAperture } from "@/lib/photo-metadata";
 import Image from "next/image";
 import { PhotoItem } from "@/types";
-import { ArrowUp, ArrowDown, Trash2, Star, Edit3 } from "lucide-react";
+import { ArrowUp, ArrowDown, Trash2, Star } from "lucide-react";
+
+function ApertureInput({ value, onChange }: { value?: string; onChange: (value: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return <input type="text" aria-label="조리개" placeholder="조리개 (e.g. f/2.8)"
+    value={draft ?? formatAperture(value)}
+    onFocus={() => setDraft(formatAperture(value))}
+    onChange={event => { setDraft(event.target.value); onChange(event.target.value); }}
+    onBlur={event => { onChange(formatAperture(event.target.value)); setDraft(null); }}
+    className="bg-zinc-950 border border-zinc-800/80 rounded px-2 py-1 text-zinc-300 focus:outline-none focus:border-zinc-600" />;
+}
 
 interface PhotoSortableListProps {
   photos: PhotoItem[];
@@ -76,8 +88,27 @@ export const PhotoSortableList: React.FC<PhotoSortableListProps> = ({
                 />
               </div>
 
+              <details className="text-xs text-zinc-400">
+                <summary className="cursor-pointer">촬영 위치 · {photo.gps ? (photo.gps.source === "exif" ? "사진 GPS 감지됨" : "위치 설정됨") : "GPS 없음 · 직접 설정"}</summary>
+                <div className="mt-3"><LocationPicker value={photo.gps ?? null} onChange={gps => onUpdatePhoto(index, { ...photo, gps })} label={`사진 ${index + 1} 위치`} /></div>
+              </details>
               {/* Advanced EXIF Inline Editor Toggle/Inputs */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono">
+                <select
+                  aria-label="촬영 기기 유형"
+                  value={photo.exif?.deviceType || "auto"}
+                  onChange={e => {
+                    const exif = { ...photo.exif };
+                    if (e.target.value === "auto") delete exif.deviceType;
+                    else exif.deviceType = e.target.value as "mobile" | "camera";
+                    onUpdatePhoto(index, { ...photo, exif });
+                  }}
+                  className="bg-zinc-950 border border-zinc-800/80 rounded px-2 py-1 text-zinc-300 focus:outline-none focus:border-zinc-600"
+                >
+                  <option value="auto">기기 유형 자동 감지</option>
+                  <option value="mobile">모바일 · 환산 초점거리</option>
+                  <option value="camera">일반 카메라 · 실제 초점거리</option>
+                </select>
                 <input
                   type="text"
                   placeholder="카메라 (e.g. Leica M11)"
@@ -92,7 +123,7 @@ export const PhotoSortableList: React.FC<PhotoSortableListProps> = ({
                 />
                 <input
                   type="text"
-                  placeholder="렌즈 (e.g. 35mm f/1.4)"
+                  placeholder="렌즈 모델 (e.g. RF 24-105mm)"
                   value={photo.exif?.lens || ""}
                   onChange={(e) =>
                     onUpdatePhoto(index, {
@@ -104,16 +135,13 @@ export const PhotoSortableList: React.FC<PhotoSortableListProps> = ({
                 />
                 <input
                   type="text"
-                  placeholder="조리개 (e.g. f/2.8)"
-                  value={photo.exif?.aperture || ""}
-                  onChange={(e) =>
-                    onUpdatePhoto(index, {
-                      ...photo,
-                      exif: { ...photo.exif, aperture: e.target.value },
-                    })
-                  }
+                  aria-label="35mm 환산 초점거리"
+                  placeholder="35mm 환산 초점거리 (e.g. 48mm)"
+                  value={photo.exif?.focalLength35mm || ""}
+                  onChange={e => onUpdatePhoto(index, { ...photo, exif: { ...photo.exif, focalLength35mm: e.target.value } })}
                   className="bg-zinc-950 border border-zinc-800/80 rounded px-2 py-1 text-zinc-300 focus:outline-none focus:border-zinc-600"
                 />
+                <ApertureInput value={photo.exif?.aperture} onChange={aperture => onUpdatePhoto(index, { ...photo, exif: { ...photo.exif, aperture } })} />
                 <input
                   type="text"
                   placeholder="셔터속도 (e.g. 1/1000s)"

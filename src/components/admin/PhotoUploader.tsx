@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import exifr from "exifr";
+import { isValidGps } from "@/lib/geo";
+import { photoExifFromTags } from "@/lib/photo-metadata";
 import { processImageForWeb } from "@/lib/image-processor";
 import { uploadPhotoImages } from "@/lib/db";
+import { mapConcurrent } from "@/lib/parallel";
 import { PhotoItem, CompressionProgress } from "@/types";
 import { UploadCloud, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
@@ -13,45 +17,56 @@ interface PhotoUploaderProps {
 
 export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ sessionId, onPhotosUploaded }) => {
   const [uploading, setUploading] = useState(false);
+  const uploadLock = useRef(false);
   const [progresses, setProgresses] = useState<Record<string, CompressionProgress>>({});
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+    if (files.length === 0 || uploadLock.current) return;
+    e.target.value = "";
 
+    uploadLock.current = true;
     setUploading(true);
-    const newUploadedPhotos: PhotoItem[] = [];
-
-    for (let index = 0; index < files.length; index++) {
-      const file = files[index];
-      const photoId = `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const batchId = Date.now();
+    const jobs = files.map((file, index) => ({ file, photoId: `photo_${batchId}_${index}_${Math.random().toString(36).substring(2, 7)}` }));
+    const device = navigator as Navigator & { deviceMemory?: number };
+    const concurrency = device.deviceMemory && device.deviceMemory <= 4 ? 2 : 3;
+    setProgresses(Object.fromEntries(jobs.map(({file, photoId}) => [photoId, {fileName: file.name, stage: "queued", progress: 0}])));
+    try {
+    const results = await mapConcurrent(jobs, concurrency, async ({file, photoId}, index) => {
 
       setProgresses((prev) => ({
         ...prev,
-        [file.name]: { fileName: file.name, stage: "resizing", progress: 10 },
+        [photoId]: { fileName: file.name, stage: "resizing", progress: 10 },
       }));
 
       try {
+        const metadata = await exifr.gps(file).catch(() => null);
+        const gps = metadata ? { ...metadata, source: "exif" as const } : null;
+        const tags = await exifr.parse(file, { pick: ["Make", "Model", "LensModel", "ISO", "FNumber", "ExposureTime", "FocalLength", "FocalLengthIn35mmFormat", "DateTimeOriginal"] }).catch(() => null);
+        const exif = photoExifFromTags(tags);
         // 1. Compress in browser (~500px, ~1600px, ~3000px WebP)
         const compressed = await processImageForWeb(file, (stage, percent) => {
           setProgresses((prev) => ({
             ...prev,
-            [file.name]: { fileName: file.name, stage: "resizing", progress: percent },
+            [photoId]: { fileName: file.name, stage: "resizing", progress: percent },
           }));
         });
 
-        // 2. Upload to Storage
+        // Firebase receives only the three downscaled WebP files.
         setProgresses((prev) => ({
           ...prev,
-          [file.name]: { fileName: file.name, stage: "uploading", progress: 90 },
+          [photoId]: { fileName: file.name, stage: "uploading", progress: 90 },
         }));
 
         const { urls, storagePaths } = await uploadPhotoImages(sessionId, photoId, compressed);
 
         const newPhotoItem: PhotoItem = {
           id: photoId,
-          order: Date.now() + index,
+          order: batchId + index,
           caption: "",
+          gps: isValidGps(gps) ? gps : null,
+          exif,
           urls,
           storagePaths,
           aspectRatio: compressed.aspectRatio,
@@ -59,30 +74,34 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ sessionId, onPhoto
           height: compressed.height,
         };
 
-        newUploadedPhotos.push(newPhotoItem);
-
         setProgresses((prev) => ({
           ...prev,
-          [file.name]: { fileName: file.name, stage: "completed", progress: 100 },
+          [photoId]: { fileName: file.name, stage: "completed", progress: 100 },
         }));
-      } catch (err: any) {
+        return newPhotoItem;
+      } catch (err: unknown) {
         console.error("Failed to upload image:", err);
         setProgresses((prev) => ({
           ...prev,
-          [file.name]: {
+          [photoId]: {
             fileName: file.name,
             stage: "error",
             progress: 0,
-            error: err.message || "업로드 실패",
+            error: err instanceof Error ? err.message : "업로드 실패",
           },
         }));
+        throw err;
       }
-    }
+    });
+    const newUploadedPhotos = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
 
     if (newUploadedPhotos.length > 0) {
       onPhotosUploaded(newUploadedPhotos);
     }
-    setUploading(false);
+    } finally {
+      uploadLock.current = false;
+      setUploading(false);
+    }
   };
 
   return (
@@ -109,10 +128,11 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ sessionId, onPhoto
       {Object.keys(progresses).length > 0 && (
         <div className="space-y-2 bg-zinc-900/80 border border-zinc-800 p-4 rounded-xl text-xs font-mono">
           <div className="text-zinc-400 font-semibold mb-2">처리 및 업로드 현황</div>
-          {Object.values(progresses).map((p) => (
-            <div key={p.fileName} className="flex items-center justify-between gap-4 py-1.5 border-b border-zinc-800/40 last:border-0">
+          {Object.entries(progresses).map(([id, p]) => (
+            <div key={id} className="flex items-center justify-between gap-4 py-1.5 border-b border-zinc-800/40 last:border-0">
               <span className="truncate text-zinc-300 max-w-[240px]">{p.fileName}</span>
               <div className="flex items-center gap-2">
+                {p.stage === "queued" && <span className="text-zinc-500">대기 중</span>}
                 {p.stage === "completed" && (
                   <span className="text-emerald-400 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" /> 완료
@@ -125,7 +145,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ sessionId, onPhoto
                 )}
                 {(p.stage === "resizing" || p.stage === "uploading") && (
                   <span className="text-amber-400 flex items-center gap-1">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {p.stage === "resizing" ? "최적화 변환" : "전송 중"} ({p.progress}%)
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {p.stage === "resizing" ? "최적화 변환" : "Firebase 축소본 전송 중"} ({p.progress}%)
                   </span>
                 )}
               </div>

@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
+    minimumCacheTTL: 2678400, // Reuse optimized images for 31 days.
     remotePatterns: [
       {
         protocol: "https",

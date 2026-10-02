@@ -1,4 +1,5 @@
 import { PhotoSession } from "@/types";
+import { withDemoCoordinates } from "./demo-locations";
 
 const MOCK_SESSION_BASE: PhotoSession[] = [
   {
@@ -625,7 +626,7 @@ const MOCK_SESSION_BASE: PhotoSession[] = [
 
 // Reuse existing sample assets to give every demo gallery three distinct photos.
 // These are UI fixtures, not additional photographs from the named locations.
-export const INITIAL_MOCK_SESSIONS: PhotoSession[] = MOCK_SESSION_BASE.map((session, index) => ({
+export const INITIAL_MOCK_SESSIONS: PhotoSession[] = MOCK_SESSION_BASE.map((session, index) => withDemoCoordinates({
   ...session,
   photos: [
     ...session.photos,

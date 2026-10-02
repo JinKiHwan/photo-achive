@@ -1,10 +1,18 @@
+export interface GeoLocation {
+  latitude: number;
+  longitude: number;
+  source: "exif" | "manual" | "search" | "demo";
+}
+
 export interface PhotoExif {
+  deviceType?: "mobile" | "camera";
   camera?: string;
   lens?: string;
   iso?: string;
   aperture?: string;
   shutter?: string;
   focalLength?: string;
+  focalLength35mm?: string;
   takenAt?: string;
 }
 
@@ -25,6 +33,7 @@ export interface PhotoItem {
   order: number;
   caption?: string;
   location?: string;
+  gps?: GeoLocation | null;
   exif?: PhotoExif;
   urls: PhotoUrls;
   storagePaths?: PhotoStoragePaths;
@@ -40,6 +49,7 @@ export interface PhotoSession {
   title: string;
   date: string; // YYYY-MM-DD
   location: string;
+  gps?: GeoLocation | null;
   weather?: string;
   camera?: string;
   description: string;
@@ -54,7 +64,7 @@ export interface PhotoSession {
 
 export interface CompressionProgress {
   fileName: string;
-  stage: 'resizing' | 'uploading' | 'completed' | 'error';
+  stage: 'queued' | 'resizing' | 'uploading' | 'completed' | 'error';
   progress: number;
   error?: string;
 }

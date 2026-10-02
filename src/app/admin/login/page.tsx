@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { isFirebaseConfigured } from "@/lib/firebase";
@@ -8,16 +8,15 @@ import { Lock, LogIn, Sparkles, ShieldCheck } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const { login, isAdmin } = useAuth();
-  const [email, setEmail] = useState("admin@photoarchive.kr");
-  const [password, setPassword] = useState("admin123");
+  const { login, isAdmin, loading: authLoading } = useAuth();
+  const [email, setEmail] = useState(isFirebaseConfigured ? "" : "admin@photoarchive.kr");
+  const [password, setPassword] = useState(isFirebaseConfigured ? "" : "admin123");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  if (isAdmin) {
-    router.replace("/admin");
-    return null;
-  }
+  useEffect(() => {
+    if (!authLoading && isAdmin) router.replace("/admin");
+  }, [authLoading, isAdmin, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,14 +25,15 @@ export default function AdminLoginPage() {
 
     try {
       await login(email, password);
-      router.push("/admin");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "로그인에 실패했습니다.");
+      setError(err instanceof Error ? err.message : "로그인에 실패했습니다.");
     } finally {
       setLoading(false);
     }
   };
+
+  if (authLoading || isAdmin) return null;
 
   return (
     <div className="min-h-[75vh] flex items-center justify-center px-6 py-12">

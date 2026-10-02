@@ -1,14 +1,14 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // Sessions photo storage
+    function isAdmin() { return request.auth != null && request.auth.uid == '8eI45u6PWlWlEdZ1c5qfBH0lHMW2'; }
     match /sessions/{sessionId}/{photoId}/{fileName} {
-      // Anyone can read public photo files
-      allow read: if true;
-      
-      // Only authenticated admin can upload or delete photo files
-      allow write: if request.auth != null;
+      allow read: if isAdmin() || (firestore.exists(/databases/(default)/documents/sessions/$(sessionId))
+        && firestore.get(/databases/(default)/documents/sessions/$(sessionId)).data.isPublished == true);
+      allow create, update: if isAdmin() && fileName in ['thumb.webp','medium.webp','large.webp']
+        && request.resource.size <= 15 * 1024 * 1024
+        && request.resource.contentType == 'image/webp';
+      allow delete: if isAdmin();
     }
   }
 }

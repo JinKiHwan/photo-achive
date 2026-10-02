@@ -1,49 +1,98 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PhotoSession, PhotoItem } from "@/types";
+import { PhotoSession, PhotoItem, GeoLocation } from "@/types";
+import { LocationPicker } from "./LocationPicker";
 import { saveSession } from "@/lib/db";
 import { PhotoUploader } from "./PhotoUploader";
 import { PhotoSortableList } from "./PhotoSortableList";
-import { Save, ArrowLeft, Globe, EyeOff, FolderOpen, Calendar, MapPin, Camera } from "lucide-react";
+import { Save, ArrowLeft, Globe, EyeOff, Calendar, MapPin, Camera } from "lucide-react";
 
 interface SessionFormProps {
   initialSession?: PhotoSession;
   isEdit?: boolean;
 }
+const placeNames = new Map<string, string>();
 
-export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, isEdit = false }) => {
+export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
 
   // Generate unique ID for new session
-  const defaultId = initialSession?.id || `session_${Date.now()}`;
+  const [defaultId] = useState(() => initialSession?.id || `session_${Date.now()}`);
 
   const [title, setTitle] = useState(initialSession?.title || "");
-  const [slug, setSlug] = useState(initialSession?.slug || "");
   const [date, setDate] = useState(initialSession?.date || new Date().toISOString().split("T")[0]);
   const [location, setLocation] = useState(initialSession?.location || "");
+  const [placeStatus, setPlaceStatus] = useState("");
+  const [gps, setGps] = useState<GeoLocation | null>(initialSession?.gps ?? null);
   const [weather, setWeather] = useState(initialSession?.weather || "");
+  const [autoWeather, setAutoWeather] = useState(!initialSession?.weather);
+  const [weatherStatus, setWeatherStatus] = useState("");
   const [camera, setCamera] = useState(initialSession?.camera || "");
   const [description, setDescription] = useState(initialSession?.description || "");
-  const [gdriveFolderRef, setGdriveFolderRef] = useState(initialSession?.gdriveFolderRef || "");
   const [isPublished, setIsPublished] = useState(initialSession?.isPublished ?? true);
   const [coverImageId, setCoverImageId] = useState(initialSession?.coverImageId || "");
   const [coverImageUrl, setCoverImageUrl] = useState(initialSession?.coverImageUrl || "");
   const [photos, setPhotos] = useState<PhotoItem[]>(initialSession?.photos || []);
+  const placeLatitude = gps?.latitude;
+  const placeLongitude = gps?.longitude;
+
+  useEffect(() => {
+    if (placeLatitude === undefined || placeLongitude === undefined) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setPlaceStatus("대표 위치의 주소를 확인하는 중…");
+      try {
+        const key = `${placeLatitude},${placeLongitude}`;
+        const cached = placeNames.get(key);
+        if (cached) { setLocation(cached); setPlaceStatus("대표 위치의 주소가 자동 입력되었습니다. 직접 수정할 수 있습니다."); return; }
+        const params = new URLSearchParams({format: "jsonv2", lat: String(placeLatitude), lon: String(placeLongitude), "accept-language": "ko"});
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {signal: controller.signal});
+        if (!response.ok) throw new Error("주소 조회 실패");
+        const result = await response.json();
+        if (controller.signal.aborted) return;
+        if (!result.display_name) throw new Error("주소가 없는 위치입니다.");
+        placeNames.set(key, result.display_name);
+        setLocation(result.display_name);
+        setPlaceStatus("대표 위치의 주소가 자동 입력되었습니다. 직접 수정할 수 있습니다.");
+      } catch {
+        if (!controller.signal.aborted) {
+          setLocation(`${placeLatitude.toFixed(5)}, ${placeLongitude.toFixed(5)}`);
+          setPlaceStatus("주소를 찾지 못해 좌표를 입력했습니다. 장소명을 직접 수정할 수 있습니다.");
+        }
+      }
+    }, 1500);
+    return () => {clearTimeout(timer); controller.abort();};
+  }, [placeLatitude, placeLongitude]);
+
+  const weatherGps = gps ?? photos.find(photo => photo.id === coverImageId)?.gps ?? photos.find(photo => photo.gps)?.gps;
+  const latitude = weatherGps?.latitude;
+  const longitude = weatherGps?.longitude;
+  useEffect(() => {
+    if (!autoWeather || latitude === undefined || longitude === undefined || !date) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setWeatherStatus("날씨 조회 중…");
+      setWeather("");
+      try {
+        const params = new URLSearchParams({latitude: String(latitude), longitude: String(longitude), date});
+        const response = await fetch(`/api/weather?${params}`, {signal: controller.signal});
+        const result = await response.json();
+        if (controller.signal.aborted) return;
+        if (!response.ok) throw new Error(result.error);
+        setWeather(result.summary);
+        setWeatherStatus("해당 위치의 하루 대표 날씨 · 일평균 기온입니다. 촬영 순간의 날씨와 다를 수 있습니다.");
+      } catch (error) {
+        if (!controller.signal.aborted) setWeatherStatus(error instanceof Error ? error.message : "날씨 조회 실패");
+      }
+    }, 600);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [autoWeather, latitude, longitude, date]);
 
   const handleTitleChange = (val: string) => {
     setTitle(val);
-    if (!isEdit && !slug) {
-      // Auto generate slug from title
-      const generatedSlug = val
-        .toLowerCase()
-        .replace(/[^a-zA-Z0-9가-힣\s-]/g, "")
-        .trim()
-        .replace(/\s+/g, "-");
-      setSlug(generatedSlug || defaultId);
-    }
   };
 
   const handlePhotosUploaded = (newUploaded: PhotoItem[]) => {
@@ -98,14 +147,14 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, isEdit
     try {
       const sessionData: PhotoSession = {
         id: defaultId,
-        slug: slug.trim() || defaultId,
+        slug: initialSession?.slug || defaultId,
         title: title.trim(),
         date,
         location: location.trim(),
+        gps,
         weather: weather.trim(),
         camera: camera.trim(),
         description: description.trim(),
-        gdriveFolderRef: gdriveFolderRef.trim(),
         isPublished,
         coverImageId: coverImageId || (photos[0]?.id || ""),
         coverImageUrl: coverImageUrl || (photos[0]?.urls.medium || ""),
@@ -169,6 +218,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, isEdit
         </div>
       </div>
 
+      <LocationPicker value={gps} onChange={setGps} onPlaceName={setLocation} label="출사 대표 위치" />
+      <p className="text-xs text-zinc-400">대표 위치가 없으면 표지 사진 GPS, GPS가 있는 첫 사진 순서로 사용합니다. 공개 글의 좌표는 방문자에게 표시됩니다.</p>
       {/* Main Info Fields */}
       <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-6 space-y-6">
         <h3 className="font-serif-book text-xl text-zinc-200 border-b border-zinc-800 pb-3">
@@ -188,16 +239,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, isEdit
             />
           </div>
 
-          <div className="space-y-1.5 col-span-2 sm:col-span-1">
-            <label className="text-xs font-mono text-zinc-400">URL 식별자 (Slug)</label>
-            <input
-              type="text"
-              placeholder="seochon-autumn-2025"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2 text-sm font-mono text-zinc-100 focus:outline-none focus:border-zinc-500"
-            />
-          </div>
 
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-zinc-400 flex items-center gap-1">
@@ -224,6 +265,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, isEdit
               onChange={(e) => setLocation(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500"
             />
+            <p aria-live="polite" className="text-[11px] text-zinc-500">{placeStatus}</p>
           </div>
 
           <div className="space-y-1.5">
@@ -232,9 +274,17 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, isEdit
               type="text"
               placeholder="e.g. 맑음, 14°C, 옅은 가을 햇살"
               value={weather}
-              onChange={(e) => setWeather(e.target.value)}
+              onChange={(e) => { setAutoWeather(false); setWeatherStatus(""); setWeather(e.target.value); }}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500"
             />
+            <label className="flex items-center gap-2 text-xs text-zinc-400">
+              <input type="checkbox" checked={autoWeather} onChange={e => { setAutoWeather(e.target.checked); setWeatherStatus(""); }} />
+              GPS와 촬영 날짜로 날씨 자동 입력
+            </label>
+            <p aria-live="polite" className="text-[11px] text-zinc-500">
+              {autoWeather && !weatherGps ? "대표 위치 또는 사진 GPS를 설정하면 조회합니다." : weatherStatus}
+            </p>
+            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="text-[10px] text-zinc-500 underline">날씨 데이터: Open-Meteo</a>
           </div>
 
           <div className="space-y-1.5">
@@ -250,21 +300,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, isEdit
             />
           </div>
 
-          <div className="space-y-1.5 col-span-2">
-            <label className="text-xs font-mono text-zinc-400 flex items-center gap-1">
-              <FolderOpen className="w-3.5 h-3.5 text-zinc-500" /> Google Drive 원본 보관소 링크 (선택)
-            </label>
-            <input
-              type="url"
-              placeholder="https://drive.google.com/drive/folders/..."
-              value={gdriveFolderRef}
-              onChange={(e) => setGdriveFolderRef(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2 text-xs font-mono text-zinc-100 focus:outline-none focus:border-zinc-500"
-            />
-            <p className="text-[11px] text-zinc-500">
-              원본 2,400만 화소 파일 장기 보존용 Drive 폴더 링크입니다. 방문자에게는 저장소 참조로 제공됩니다.
-            </p>
-          </div>
+
 
           <div className="space-y-1.5 col-span-2">
             <label className="text-xs font-mono text-zinc-400">출사 소개 글 / 노트</label>

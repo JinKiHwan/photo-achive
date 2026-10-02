@@ -39,21 +39,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       return () => unsubscribe();
     } else {
+      if (isFirebaseConfigured) {
+        queueMicrotask(() => { setUser(null); setLoading(false); });
+        return;
+      }
       // Local fallback auth check
       const localLoggedIn = localStorage.getItem(LOCAL_ADMIN_KEY) === "true";
-      if (localLoggedIn) {
-        setUser({ email: "admin@archive.photo" });
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
+      queueMicrotask(() => {
+        setUser(localLoggedIn ? { email: "admin@archive.photo" } : null);
+        setLoading(false);
+      });
     }
   }, []);
 
   const login = async (email: string, pass: string) => {
     if (isFirebaseConfigured && auth) {
-      await signInWithEmailAndPassword(auth, email, pass);
+      const credential = await signInWithEmailAndPassword(auth, email, pass);
+      if (credential.user.uid !== process.env.NEXT_PUBLIC_ADMIN_UID) {
+        await firebaseSignOut(auth);
+        throw new Error("관리자 계정만 로그인할 수 있습니다.");
+      }
     } else {
+      if (isFirebaseConfigured) throw new Error("Firebase 연결 설정을 확인해 주세요.");
       // Local demo login check
       if (email && pass) {
         localStorage.setItem(LOCAL_ADMIN_KEY, "true");
@@ -73,7 +80,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const isAdmin = Boolean(user);
+  const isAdmin = isFirebaseConfigured
+    ? Boolean(user && "uid" in user && user.uid === process.env.NEXT_PUBLIC_ADMIN_UID)
+    : Boolean(user);
 
   return (
     <AuthContext.Provider value={{ user, isAdmin, loading, login, logout }}>

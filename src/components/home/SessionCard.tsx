@@ -29,14 +29,14 @@ export const SessionCard: React.FC<SessionCardProps> = ({ session, index }) => {
       className="group relative flex flex-col bg-[#f5f5f7] text-zinc-900 p-3 pb-8 rounded-[2px] shadow-md hover:scale-[1.04] hover:-translate-y-1 hover:shadow-[0_12px_35px_rgba(255,255,255,0.18)] transition-all duration-300 ease-out cursor-pointer"
     >
       <Link href={`/sessions/${session.slug || session.id}`} className="block w-full">
-        {/* Photo Container - Reduced border radius (rounded-[1px]) */}
-        <div className="relative aspect-square w-full overflow-hidden bg-zinc-900 rounded-[1px]">
+        {/* Match the frame background so scaled edges cannot expose a dark seam. */}
+        <div className="relative aspect-square w-full overflow-hidden bg-[#f5f5f7]">
           <Image
             src={coverUrl}
             alt={session.title}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-            className="object-cover"
+            className="object-cover scale-[1.005]"
           />
 
           {/* Top-Left Date Badge */}

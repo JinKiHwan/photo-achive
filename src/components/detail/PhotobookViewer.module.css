@@ -70,10 +70,15 @@
   margin-bottom: clamp(24px, 5svh, 60px);
 }
 .photo { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; }
+.preload { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+.loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: rgb(255 255 255 / 85%); font-size: 13px; }
+.spinner { animation: photo-spin 1s linear infinite; }
+@keyframes photo-spin { to { transform: rotate(360deg); } }
 .polaroid {
   margin: 0;
-  --frame: clamp(8px, .7vw, 12px);
-  --metadata-height: clamp(60px, 8svh, 80px);
+  --frame: 12px;
+  --metadata-height: clamp(58px, 8svh, 84px);
+  container-type: inline-size;
   width: min(100cqw, calc((100cqh - var(--metadata-height) - var(--frame) * 2) * var(--photo-ratio) + var(--frame) * 2));
   padding: var(--frame);
   background: #fff;
@@ -84,11 +89,19 @@
 .mainImage { object-fit: contain; }
 .metadata {
   height: var(--metadata-height);
-  display: grid;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
   padding: 8px 2px 0;
-  overflow: auto;
+  overflow: hidden;
 }
+.cameraLine, .settingsLine { margin: 0; line-height: 1.4; max-width: 100%; }
+.cameraLine { font-size: 14px; color: #151515; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.cameraLine span { color: #888; font-weight: 400; }
+.cameraLine strong { font-weight: 650; }
+.settingsLine { color: #888; font-size: 11px; font-variant-numeric: tabular-nums; }
 .exifValues { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px clamp(10px, 2vw, 30px); margin: 0; text-align: center; }
 .exifValues dt { color: #8b8781; font-size: 9px; line-height: 1.4; }
 .exifValues dd { margin: 4px 0 0; color: #44403c; font-size: 12px; line-height: 1.4; font-variant-numeric: tabular-nums; }
@@ -138,9 +151,10 @@
   .viewport { padding-top: 20px; padding-bottom: 8px; --thumb-height: 52px; --thumb-width: 64px; }
   .stage { width: 72vw; margin-bottom: 12px; }
   .caption { height: 28px; padding-top: 5px; }
-  .polaroid { --frame: 8px; --metadata-height: 58px; }
+  .polaroid { --metadata-height: 58px; }
   .metadata { padding-top: 7px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
   .track, .thumbnail, .back { transition: none; }
 }

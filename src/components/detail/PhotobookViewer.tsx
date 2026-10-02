@@ -3,19 +3,24 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { PhotoSession } from "@/types";
+import { formatAperture, formatPhotoFocalLength } from "@/lib/photo-metadata";
 import styles from "./PhotobookViewer.module.css";
 
 export function PhotobookViewer({ session }: { session: PhotoSession }) {
   const photos = useMemo(() => [...(session.photos || [])].sort((a, b) => a.order - b.order), [session.photos]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [imageRatios, setImageRatios] = useState<Record<string, number>>({});
+  const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const rootRef = useRef<HTMLElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
   const activePhoto = photos[activeIndex] || photos[0];
+  const activeSource = activePhoto?.urls.large || activePhoto?.urls.medium || "";
+  const nextPhoto = photos[activeIndex + 1];
 
   // Native page scrolling also supports touch, trackpads and restored scroll positions.
   useEffect(() => {
@@ -80,6 +85,14 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
       tabIndex={0}
     >
       <div ref={viewportRef} className={styles.viewport}>
+        {nextPhoto && (
+          <div className={styles.preload} aria-hidden="true">
+            <Image key={`next-${nextPhoto.id}`} src={nextPhoto.urls.large || nextPhoto.urls.medium}
+              alt="" fill sizes="(max-width: 700px) 92vw, 76vw" loading="eager" />
+            <Image key={`background-${nextPhoto.id}`} src={nextPhoto.urls.medium || nextPhoto.urls.large}
+              alt="" fill sizes="100vw" loading="eager" />
+          </div>
+        )}
         <div className={styles.background} aria-hidden="true">
           <AnimatePresence initial={false}>
             {activePhoto && (
@@ -96,17 +109,22 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
         </Link>
         <h1 className="sr-only">{session.title}</h1>
 
-        <div className={styles.stage}>
+        <div className={styles.stage} aria-busy={Boolean(activePhoto && !loadedImages[activeSource] && !failedImages[activeSource])}>
           <AnimatePresence initial={false}>
             {activePhoto ? (
               <motion.div key={activePhoto.id} className={styles.photo}
                 initial={{ opacity: 0, y: reducedMotion ? 0 : 12 }} animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }} transition={{ duration }}>
+                {!loadedImages[activeSource] && (
+                  <div className={styles.loading} role="status">
+                    {failedImages[activeSource] ? <span>사진을 불러오지 못했습니다.</span> : <><Loader2 size={24} className={styles.spinner} aria-hidden="true" /><span>사진을 불러오는 중…</span></>}
+                  </div>
+                )}
                 <figure className={styles.polaroid} style={{
                   "--photo-ratio": imageRatios[activePhoto.urls.large || activePhoto.urls.medium]
                     || (activePhoto.width && activePhoto.height
                       ? activePhoto.width / activePhoto.height : activePhoto.aspectRatio || 1.5),
-                  visibility: imageRatios[activePhoto.urls.large || activePhoto.urls.medium] ? "visible" : "hidden",
+                  visibility: loadedImages[activeSource] ? "visible" : "hidden",
                 } as CSSProperties}>
                   <div className={styles.printImage}>
                     <Image
@@ -120,15 +138,19 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
                         const source = activePhoto.urls.large || activePhoto.urls.medium;
                         const ratio = image.naturalWidth / image.naturalHeight;
                         setImageRatios((current) => current[source] === ratio ? current : { ...current, [source]: ratio });
+                        setLoadedImages(current => ({ ...current, [source]: true }));
                       }}
+                      onError={() => setFailedImages(current => ({...current, [activeSource]: true}))}
                     />
                   </div>
                   <figcaption className={styles.metadata}>
-                    <dl className={styles.exifValues}>
-                      <div><dt>ISO</dt><dd>{activePhoto.exif?.iso?.replace(/^ISO\s*/i, "") || "—"}</dd></div>
-                      <div><dt>셔터스피드</dt><dd>{activePhoto.exif?.shutter || "—"}</dd></div>
-                      <div><dt>조리개</dt><dd>{activePhoto.exif?.aperture || "—"}</dd></div>
-                    </dl>
+                    <p className={styles.cameraLine}><span>Shot on </span><strong>{activePhoto.exif?.camera || session.camera || "-"}</strong></p>
+                    <p className={styles.settingsLine}>{[
+                      formatPhotoFocalLength(activePhoto.exif),
+                      formatAperture(activePhoto.exif?.aperture),
+                      activePhoto.exif?.shutter,
+                      activePhoto.exif?.iso?.replace(/^ISO\s*/i, "ISO"),
+                    ].filter(Boolean).join("  ") || "-"}</p>
                   </figcaption>
                 </figure>
               </motion.div>
