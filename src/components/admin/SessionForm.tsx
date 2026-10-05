@@ -3,6 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PhotoSession, PhotoItem, GeoLocation } from "@/types";
+import { DatePicker } from "@/components/ui/DatePicker";
+import { formatUploadDate, localDateValue } from "@/lib/dates";
+import { useAuth } from "@/context/AuthContext";
+import { MEMBER_PHOTO_LIMIT } from "@/lib/community-config";
 import { LocationPicker } from "./LocationPicker";
 import { saveSession } from "@/lib/db";
 import { PhotoUploader } from "./PhotoUploader";
@@ -12,18 +16,23 @@ import { Save, ArrowLeft, Globe, EyeOff, Calendar, MapPin, Camera } from "lucide
 interface SessionFormProps {
   initialSession?: PhotoSession;
   isEdit?: boolean;
+  memberMode?: boolean;
 }
 const placeNames = new Map<string, string>();
 
-export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
+export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, memberMode = false }) => {
   const router = useRouter();
+  const { user } = useAuth();
+  const ownerId = initialSession?.ownerId || (memberMode && user && "uid" in user ? user.uid : undefined);
+  const [uploading, setUploading] = useState(false);
+  const [shareLocation, setShareLocation] = useState(initialSession?.shareLocation ?? !memberMode);
   const [saving, setSaving] = useState(false);
 
   // Generate unique ID for new session
   const [defaultId] = useState(() => initialSession?.id || `session_${Date.now()}`);
 
   const [title, setTitle] = useState(initialSession?.title || "");
-  const [date, setDate] = useState(initialSession?.date || new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(initialSession?.date || localDateValue());
   const [location, setLocation] = useState(initialSession?.location || "");
   const [placeStatus, setPlaceStatus] = useState("");
   const [gps, setGps] = useState<GeoLocation | null>(initialSession?.gps ?? null);
@@ -32,7 +41,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
   const [weatherStatus, setWeatherStatus] = useState("");
   const [camera, setCamera] = useState(initialSession?.camera || "");
   const [description, setDescription] = useState(initialSession?.description || "");
-  const [isPublished, setIsPublished] = useState(initialSession?.isPublished ?? true);
+  const [isPublished, setIsPublished] = useState(initialSession?.isPublished ?? !memberMode);
   const [coverImageId, setCoverImageId] = useState(initialSession?.coverImageId || "");
   const [coverImageUrl, setCoverImageUrl] = useState(initialSession?.coverImageUrl || "");
   const [photos, setPhotos] = useState<PhotoItem[]>(initialSession?.photos || []);
@@ -137,20 +146,26 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !date || !location.trim()) {
-      alert("출사 제목, 날짜, 장소는 필수 입력 항목입니다.");
+    if (!title.trim() || !date || (shareLocation && !location.trim())) {
+      alert("출사 제목, 촬영 날짜, 장소는 필수 입력 항목입니다.");
       return;
     }
 
+    if (uploading) return;
+    if (memberMode && (!ownerId || photos.length > MEMBER_PHOTO_LIMIT)) {
+      alert(`로그인을 확인해 주세요. 사진은 글당 ${MEMBER_PHOTO_LIMIT}장까지 저장할 수 있습니다.`); return;
+    }
     setSaving(true);
 
     try {
       const sessionData: PhotoSession = {
+        ...initialSession,
+        ...(ownerId ? { ownerId, shareLocation } : {}),
         id: defaultId,
         slug: initialSession?.slug || defaultId,
         title: title.trim(),
         date,
-        location: location.trim(),
+        location: shareLocation ? location.trim() : "위치 비공개",
         gps,
         weather: weather.trim(),
         camera: camera.trim(),
@@ -164,7 +179,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
       };
 
       await saveSession(sessionData);
-      router.push("/admin");
+      router.push(memberMode ? "/my" : "/admin");
       router.refresh();
     } catch (err) {
       console.error("Save session failed:", err);
@@ -176,8 +191,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl mx-auto pb-20">
-      {/* Top action bar */}
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+      {/* Keep the save action visible below the site header while editing. */}
+      <div className="sticky top-20 z-30 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-700/70 bg-zinc-950/90 p-3 shadow-lg backdrop-blur-md">
         <button
           type="button"
           onClick={() => router.back()}
@@ -186,7 +201,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
           <ArrowLeft className="w-4 h-4" /> 뒤로가기
         </button>
 
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
           <button
             type="button"
             onClick={() => setIsPublished(!isPublished)}
@@ -209,17 +224,21 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading}
             className="flex items-center gap-2 px-5 py-2 rounded-lg bg-zinc-100 text-zinc-900 hover:bg-white text-xs font-medium transition disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
-            <span>{saving ? "저장 중..." : "출사 저장하기"}</span>
+            <span>{saving ? "저장 중..." : uploading ? "사진 업로드 중..." : "출사 저장하기"}</span>
           </button>
         </div>
       </div>
 
+      {(memberMode || ownerId) && <div className="rounded-xl border border-zinc-700 bg-zinc-950/80 p-4 space-y-2">
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={shareLocation} onChange={event => setShareLocation(event.target.checked)} />촬영 위치 공유</label>
+        <p className="text-xs text-zinc-400">선택하면 대표 위치와 사진 GPS가 공개 글에 표시됩니다. 선택하지 않으면 좌표와 장소명을 저장하지 않습니다. 캡션과 소개에 적은 장소는 직접 확인해 주세요.</p>
+      </div>}
       <LocationPicker value={gps} onChange={setGps} onPlaceName={setLocation} label="출사 대표 위치" />
-      <p className="text-xs text-zinc-400">대표 위치가 없으면 표지 사진 GPS, GPS가 있는 첫 사진 순서로 사용합니다. 공개 글의 좌표는 방문자에게 표시됩니다.</p>
+      <p className="text-xs text-zinc-400">대표 위치가 없으면 표지 사진 GPS, GPS가 있는 첫 사진 순서로 사용합니다. 위치 공유를 선택한 공개 글의 좌표는 방문자에게 표시됩니다.</p>
       {/* Main Info Fields */}
       <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-6 space-y-6">
         <h3 className="font-serif-book text-xl text-zinc-200 border-b border-zinc-800 pb-3">
@@ -227,11 +246,12 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-1.5 col-span-2 sm:col-span-1">
+          <div className="space-y-1.5 md:col-span-1">
             <label className="text-xs font-mono text-zinc-400">출사 제목 *</label>
             <input
               type="text"
               required
+              maxLength={300}
               placeholder="e.g. 서촌, 늦가을 빛의 잔상"
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
@@ -241,16 +261,17 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
 
 
           <div className="space-y-1.5">
-            <label className="text-xs font-mono text-zinc-400 flex items-center gap-1">
+            <label htmlFor="shooting-date" className="text-xs font-mono text-zinc-400 flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5 text-zinc-500" /> 촬영 날짜 *
             </label>
-            <input
-              type="date"
-              required
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500 font-mono"
-            />
+            <DatePicker id="shooting-date" value={date} onChange={setDate} />
+            <p className="text-[11px] text-zinc-500">실제로 촬영한 날짜입니다. 날씨 조회에 사용되며, 메인 목록은 업로드 날짜순으로 표시됩니다.</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-mono text-zinc-400">업로드 날짜 · 자동 기록</p>
+            <p className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3.5 py-2 text-sm text-zinc-400 font-mono">{initialSession ? formatUploadDate(initialSession.createdAt) : "처음 저장할 때 기록됩니다"}</p>
+            <p className="text-[11px] text-zinc-500">사진집을 처음 저장한 날짜(한국 시간)입니다. 촬영일을 수정해도 유지됩니다.</p>
           </div>
 
           <div className="space-y-1.5">
@@ -259,7 +280,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
             </label>
             <input
               type="text"
-              required
+              required={shareLocation}
+              maxLength={2000}
               placeholder="e.g. 서울 종로구 서촌 & 옥인동"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
@@ -302,10 +324,11 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
 
 
 
-          <div className="space-y-1.5 col-span-2">
+          <div className="space-y-1.5 md:col-span-2">
             <label className="text-xs font-mono text-zinc-400">출사 소개 글 / 노트</label>
             <textarea
               rows={4}
+              maxLength={50000}
               placeholder="출사 당시의 정경, 느낌, 빛의 각도 등을 자유롭게 서술하세요."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -320,7 +343,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession }) => {
         <h3 className="font-serif-book text-xl text-zinc-200 border-b border-zinc-800 pb-3">
           2. 사진 일괄 업로드 및 웹 최적화
         </h3>
-        <PhotoUploader sessionId={defaultId} onPhotosUploaded={handlePhotosUploaded} />
+        <PhotoUploader sessionId={defaultId} ownerId={ownerId} remaining={(memberMode ? MEMBER_PHOTO_LIMIT : 500) - photos.length} onBusyChange={setUploading} onPhotosUploaded={handlePhotosUploaded} />
       </div>
 
       {/* Photo Ordering & Metadata Section */}

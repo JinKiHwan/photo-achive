@@ -19,7 +19,8 @@ export default function EditSessionPage({ params }: EditSessionPageProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
+    if (authLoading) return;
+    if (!isAdmin) {
       router.push("/admin/login");
       return;
     }
@@ -33,7 +34,7 @@ export default function EditSessionPage({ params }: EditSessionPageProps) {
     load();
   }, [id, isAdmin, authLoading, router]);
 
-  if (authLoading || loading) {
+  if (authLoading || !isAdmin || loading) {
     return <div className="p-12 text-center text-xs font-mono text-zinc-500">불러오는 중...</div>;
   }
 

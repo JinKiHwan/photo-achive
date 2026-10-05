@@ -1,5 +1,12 @@
-@import url('https://fonts.googleapis.com/earlyaccess/nanumpenscript.css');
 @import "tailwindcss";
+
+@font-face {
+  font-family: 'InkLiquid';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/InkLipquid.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
 
 @layer base {
   :root {
@@ -52,9 +59,10 @@
   font-family: "Cormorant Garamond", "Noto Serif KR", Georgia, serif;
 }
 
-/* Handwritten Nanum Pen Script font for polaroid card titles */
+/* InkLiquid handwriting for polaroid card titles */
 .font-handwriting {
-  font-family: 'Nanum Pen Script', cursive, sans-serif;
+  font-family: 'InkLiquid', cursive, sans-serif;
+  font-weight: normal;
 }
 
 /* Smooth fade mask for cover photos */

@@ -1,6 +1,6 @@
 .book {
   position: relative;
-  height: calc(100svh + var(--steps) * 70svh);
+  height: calc(100svh + var(--steps) * 35svh);
   background: #101010;
   color: #fff;
 }
@@ -165,3 +165,43 @@
   .spinner { animation: none; }
   .track, .thumbnail, .back { transition: none; }
 }
+
+.sessionDates { position: absolute; top: max(18px, env(safe-area-inset-top)); right: 18px; z-index: 3; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 12px; max-width: calc(100% - 90px); padding: 6px 10px; border-radius: 8px; background: rgb(0 0 0 / 40%); color: #e4e4e7; font-size: 10px; font-variant-numeric: tabular-nums; backdrop-filter: blur(8px); }
+
+/* Equal side columns keep the photo centered independently of the story. */
+.content { position: relative; z-index: 3; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); align-items: stretch; gap: clamp(16px, 3vw, 48px); width: min(92vw, 1800px); flex: 1; min-height: 0; margin-bottom: clamp(24px, 5svh, 60px); }
+.content .stage { grid-column: 2; grid-row: 1; width: auto; flex: 1; min-width: 0; margin-bottom: 0; }
+.story { grid-column: 1; grid-row: 1; min-width: 0; align-self: center; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 16px 12px 16px 0; }
+.story h1 { margin: 0 0 20px; font-family: 'InkLiquid', sans-serif; font-size: clamp(28px, 3vw, 42px); line-height: 1.25; overflow-wrap: anywhere; }
+.story p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #e4e4e7; font-size: 14px; line-height: 1.9; }
+.story:focus-visible { outline: 1px solid #a1a1aa; outline-offset: 4px; }
+.hoverCaption { position: absolute; bottom: 0; left: 0; right: 0; max-height: 50%; overflow-y: auto; padding: 32px 16px 16px; background: linear-gradient(transparent, rgb(0 0 0 / 85%)); color: white; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; opacity: 0; pointer-events: none; transition: opacity 180ms; }
+.printImage:hover .hoverCaption, .printImage:focus-within .hoverCaption { opacity: 1; pointer-events: auto; }
+.sessionDates { flex-direction: column; align-items: flex-end; }
+.dateRow { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 12px; }
+.locationButton { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; padding: 6px 9px; border: 1px solid rgb(255 255 255 / 30%); border-radius: 6px; background: rgb(0 0 0 / 25%); color: white; font-size: 11px; cursor: pointer; }
+.locationButton:disabled { opacity: .5; cursor: default; }
+.locationButton:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+.locationDialog { position: fixed; inset: 0; width: min(760px, 94vw); max-width: 94vw; max-height: 90svh; margin: auto; padding: 0; border: 1px solid #3f3f46; border-radius: 16px; background: #18181b; color: white; }
+.locationDialog::backdrop { background: rgb(0 0 0 / 70%); backdrop-filter: blur(5px); }
+.locationPanel { padding: 20px; }
+.locationHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.locationHeader h2 { font-size: 18px; }
+.locationHeader p { color: #a1a1aa; font-size: 12px; margin-top: 4px; }
+.locationHeader button { padding: 8px; border-radius: 50%; background: #27272a; cursor: pointer; }
+.locationMap { height: min(52svh, 440px); overflow: hidden; border-radius: 8px; }
+.locationFooter { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding-top: 14px; font-size: 12px; color: #d4d4d8; }
+.locationFooter a { text-decoration: underline; }
+@media (max-width: 700px) {
+  .viewport { padding-top: 110px; }
+  .content { display: flex; flex-direction: column; gap: 14px; margin-bottom: 14px; }
+  .story { flex: 0 1 auto; align-self: stretch; max-height: 20svh; padding: 0 4px; }
+  .story h1 { font-size: 26px; margin-bottom: 8px; }
+  .story p { font-size: 12px; line-height: 1.7; }
+}
+@media (hover: none) { .hoverCaption { opacity: 1; pointer-events: auto; padding: 18px 10px 10px; font-size: 11px; } }
+@media (max-height: 500px) {
+  .viewport { padding-top: 90px; }
+  .content { gap: 16px; margin-bottom: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .hoverCaption { transition: none; } }

@@ -6,8 +6,14 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from "firebase/auth";
-import { auth, isFirebaseConfigured } from "@/lib/firebase";
+import { membershipEnabled } from "@/lib/community-config";
+import { acceptMembership } from "@/lib/membership";
+import { auth, db, isFirebaseConfigured } from "@/lib/firebase";
+
+import { doc, getDoc } from "firebase/firestore";
 
 interface AuthContextType {
   user: User | { email: string } | null;
@@ -15,6 +21,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,6 +30,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   login: async () => {},
   logout: async () => {},
+  loginWithGoogle: async () => {},
 });
 
 const LOCAL_ADMIN_KEY = "photo_archive_admin_logged_in";
@@ -71,6 +79,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async () => {
+    if (!membershipEnabled || !auth || !db) throw new Error("회원 서비스 오픈을 준비하고 있습니다.");
+    const settings = await getDoc(doc(db, "config", "community"));
+    if (!settings.exists() || settings.data().enabled !== true) throw new Error("현재 신규 회원 서비스를 준비 중입니다.");
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    const result = await signInWithPopup(auth, provider);
+    await acceptMembership(result.user);
+  };
+
   const logout = async () => {
     if (isFirebaseConfigured && auth) {
       await firebaseSignOut(auth);
@@ -85,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     : Boolean(user);
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin, loading, login, logout, loginWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );

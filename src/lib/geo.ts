@@ -1,4 +1,4 @@
-import { GeoLocation, PhotoSession } from "@/types";
+import { GeoLocation, PhotoItem, PhotoSession } from "@/types";
 
 export function isValidGps(value: unknown): value is GeoLocation {
   if (!value || typeof value !== "object") return false;
@@ -11,4 +11,9 @@ export function sessionGps(session: PhotoSession): GeoLocation | undefined {
   const cover = session.photos.find(photo => photo.id === session.coverImageId);
   if (isValidGps(cover?.gps)) return cover.gps;
   return session.photos.find(photo => isValidGps(photo.gps))?.gps ?? undefined;
+}
+
+export function viewingPhotoGps(photo: PhotoItem | undefined, session: PhotoSession): GeoLocation | undefined {
+  if (isValidGps(photo?.gps)) return photo.gps;
+  return isValidGps(session.gps) ? session.gps : undefined;
 }

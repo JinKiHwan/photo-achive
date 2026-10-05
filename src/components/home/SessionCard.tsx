@@ -30,7 +30,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({ session, index }) => {
     >
       <Link href={`/sessions/${session.slug || session.id}`} className="block w-full">
         {/* Match the frame background so scaled edges cannot expose a dark seam. */}
-        <div className="relative aspect-square w-full overflow-hidden bg-[#f5f5f7]">
+        <div className="relative aspect-[10/11] w-full overflow-hidden bg-[#f5f5f7]">
           <Image
             src={coverUrl}
             alt={session.title}
@@ -38,16 +38,9 @@ export const SessionCard: React.FC<SessionCardProps> = ({ session, index }) => {
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             className="object-cover scale-[1.005]"
           />
-
-          {/* Top-Left Date Badge */}
-          <div className="absolute top-2.5 left-2.5 z-10">
-            <span className="px-2 py-0.5 rounded-[2px] bg-black/75 backdrop-blur-md text-white font-mono text-[11px] tracking-tight font-medium shadow-md">
-              {session.date}
-            </span>
-          </div>
         </div>
 
-        {/* Polaroid Bottom Chin - Nanum Pen Script Handwritten font (font-handwriting) */}
+        {/* Polaroid card title */}
         <div className="mt-3.5 flex items-center justify-center min-h-[3rem] text-center px-1">
           <h2 className="font-handwriting text-lg sm:text-xl text-zinc-900 tracking-normal leading-snug line-clamp-2 group-hover:text-black transition-colors">
             {session.title}

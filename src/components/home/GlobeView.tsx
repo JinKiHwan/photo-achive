@@ -32,8 +32,8 @@ export default function GlobeView({ sessions }: { sessions: PhotoSession[] }) {
         const selected = activeId === session.id;
         const cover = session.coverImageUrl || session.photos[0]?.urls.thumb;
         return <button key={session.id} type="button" aria-pressed={selected} onClick={() => setActiveId(session.id)} className={`w-64 shrink-0 snap-start overflow-hidden rounded-xl border text-left transition ${selected ? "border-orange-400 bg-orange-400/10 ring-1 ring-orange-400" : "border-zinc-800 bg-zinc-950/70 hover:border-zinc-500"}`}>
-          <div className="relative h-32 bg-zinc-900">{cover && <Image src={cover} alt={session.title} fill sizes="256px" className="object-cover" />}</div>
-          <div className="space-y-1 p-3"><h2 className="truncate text-sm text-zinc-100">{session.title}</h2><p className="truncate text-xs text-zinc-400">{session.location}</p><p className="text-[11px] text-zinc-500">{located ? session.date : "촬영 좌표 미등록"}</p></div>
+          <div className="relative h-36 bg-zinc-900">{cover && <Image src={cover} alt={session.title} fill sizes="256px" className="object-cover" />}</div>
+          <div className="space-y-1 p-3"><h2 className="truncate text-sm text-zinc-100">{session.title}</h2><p className="truncate text-xs text-zinc-400">{session.location}</p>{!located && <p className="text-[11px] text-zinc-500">촬영 좌표 미등록</p>}</div>
         </button>;
       })}
     </SessionStrip>

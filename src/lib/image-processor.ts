@@ -30,6 +30,7 @@ export async function processImageForWeb(
   const thumbFile = await imageCompression(file, {
     maxWidthOrHeight: 500,
     fileType: "image/webp",
+    preserveExif: false,
     initialQuality: 0.85,
     useWebWorker: true,
   });
@@ -40,6 +41,7 @@ export async function processImageForWeb(
   const mediumFile = await imageCompression(file, {
     maxWidthOrHeight: 1600,
     fileType: "image/webp",
+    preserveExif: false,
     initialQuality: 0.88,
     useWebWorker: true,
   });
@@ -50,6 +52,7 @@ export async function processImageForWeb(
   const largeFile = await imageCompression(file, {
     maxWidthOrHeight: 3000,
     fileType: "image/webp",
+    preserveExif: false,
     initialQuality: 0.92,
     useWebWorker: true,
   });

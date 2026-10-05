@@ -15,7 +15,7 @@ export default function NewSessionPage() {
     }
   }, [isAdmin, loading, router]);
 
-  if (loading) {
+  if (loading || !isAdmin) {
     return <div className="p-12 text-center text-xs font-mono text-zinc-500">인증 확인 중...</div>;
   }
 

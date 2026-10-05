@@ -3,10 +3,26 @@ rules_version = '2';
 // Required: id, slug, title, date, location, description, isPublished,
 // photos (list, <=500), createdAt and updatedAt (ISO strings).
 // Optional: gps (bounded coordinates), weather, camera, covers, Drive link.
-// ID, slug and createdAt are immutable. Only the configured administrator writes.
+// ID, slug, ownerId and createdAt are immutable. Legacy posts remain admin-only.
+// members/{uid}: private policyVersion, acceptedAt (timestamp), deleting (bool).
+// reports/{uid_sessionId}: reporterId, sessionId, reason, createdAt, status.
+// config/community: trusted launch control, managed through Console only.
+// Member posts have ownerId, shareLocation, photoCount and an empty photos list.
+// sessions/{id}/photos/{photoId} contains individually validated photo metadata.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isAdmin() { return request.auth != null && request.auth.uid == '8eI45u6PWlWlEdZ1c5qfBH0lHMW2'; }
+    function owns(data) { return request.auth != null && data.get('ownerId', '') == request.auth.uid; }
+    function communityOpen() {
+      return exists(/databases/$(database)/documents/config/community)
+        && get(/databases/$(database)/documents/config/community).data.enabled == true;
+    }
+    function activeMember() {
+      return request.auth != null && communityOpen()
+        && exists(/databases/$(database)/documents/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.deleting == false
+        && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.policyVersion == '2026-10-04';
+    }
     function optionalString(data, key, maximum) { return !(key in data) || (data[key] is string && data[key].size() <= maximum); }
     function validGps(gps) {
       return gps == null || (gps is map && gps.keys().hasAll(['latitude','longitude','source'])
@@ -17,7 +33,7 @@ service cloud.firestore {
     }
     function validSession(data, id) {
       return data.keys().hasAll(['id','slug','title','date','location','description','isPublished','photos','createdAt','updatedAt'])
-        && data.keys().hasOnly(['id','slug','title','date','location','description','isPublished','photos','createdAt','updatedAt','gps','weather','camera','coverImageId','coverImageUrl','gdriveFolderRef'])
+        && data.keys().hasOnly(['id','slug','title','date','location','description','isPublished','photos','createdAt','updatedAt','gps','weather','camera','coverImageId','coverImageUrl','gdriveFolderRef','ownerId','shareLocation','photoCount'])
         && data.id == id && data.slug is string && data.slug.size() > 0 && data.slug.size() <= 200
         && data.title is string && data.title.size() > 0 && data.title.size() <= 300
         && data.date is string && data.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
@@ -29,16 +45,119 @@ service cloud.firestore {
         && (!('gps' in data) || validGps(data.gps))
         && optionalString(data,'weather',500) && optionalString(data,'camera',500)
         && optionalString(data,'coverImageId',200) && optionalString(data,'coverImageUrl',4000)
-        && optionalString(data,'gdriveFolderRef',4000);
+        && optionalString(data,'gdriveFolderRef',4000)
+        && optionalString(data,'ownerId',128)
+        && (!('shareLocation' in data) || data.shareLocation is bool)
+        && (!('photoCount' in data) || (data.photoCount is int && data.photoCount >= 0 && data.photoCount <= 12));
+    }
+    function validMember(data) {
+      return data.keys().hasAll(['policyVersion','acceptedAt','deleting'])
+        && data.keys().hasOnly(['policyVersion','acceptedAt','deleting'])
+        && data.policyVersion == '2026-10-04'
+        && data.acceptedAt is timestamp && data.acceptedAt <= request.time
+        && data.deleting is bool;
+    }
+    function validExif(exif) {
+      return exif is map && exif.keys().hasOnly(['deviceType','camera','lens','iso','aperture','shutter','focalLength','focalLength35mm','takenAt'])
+        && (!('deviceType' in exif) || exif.deviceType in ['mobile','camera'])
+        && optionalString(exif,'camera',500) && optionalString(exif,'lens',500)
+        && optionalString(exif,'iso',80) && optionalString(exif,'aperture',80)
+        && optionalString(exif,'shutter',80) && optionalString(exif,'focalLength',80)
+        && optionalString(exif,'focalLength35mm',80) && optionalString(exif,'takenAt',80);
+    }
+    function validPhoto(photo, data) {
+      let path = 'members/' + data.ownerId + '/sessions/' + data.id + '/' + photo.id;
+      return photo is map && photo.keys().hasAll(['id','order','urls','storagePaths'])
+        && photo.keys().hasOnly(['id','order','caption','location','gps','exif','urls','storagePaths','aspectRatio','width','height'])
+        && photo.id is string && photo.id.matches('[A-Za-z0-9_-]{1,100}')
+        && photo.order is number && photo.order >= 0 && photo.order <= 9999999999999
+        && optionalString(photo,'caption',2000) && optionalString(photo,'location',2000)
+        && (!('gps' in photo) || validGps(photo.gps))
+        && (data.shareLocation || (photo.get('gps', null) == null && photo.get('location', '') == ''))
+        && (!('exif' in photo) || validExif(photo.exif))
+        && (!('aspectRatio' in photo) || (photo.aspectRatio is number && photo.aspectRatio > 0 && photo.aspectRatio <= 100))
+        && (!('width' in photo) || (photo.width is number && photo.width > 0 && photo.width <= 100000))
+        && (!('height' in photo) || (photo.height is number && photo.height > 0 && photo.height <= 100000))
+        && photo.storagePaths is map && photo.storagePaths.keys().hasAll(['thumb','medium','large'])
+        && photo.storagePaths.keys().hasOnly(['thumb','medium','large'])
+        && photo.storagePaths.thumb == path + '/thumb.webp'
+        && photo.storagePaths.medium == path + '/medium.webp'
+        && photo.storagePaths.large == path + '/large.webp'
+        && photo.urls is map && photo.urls.keys().hasAll(['thumb','medium','large'])
+        && photo.urls.keys().hasOnly(['thumb','medium','large'])
+        && validPhotoUrl(photo.urls.thumb, data, photo.id, 'thumb')
+        && validPhotoUrl(photo.urls.medium, data, photo.id, 'medium')
+        && validPhotoUrl(photo.urls.large, data, photo.id, 'large');
+    }
+    function validPhotoUrl(url, data, photoId, size) {
+      return url is string && url.size() <= 4000
+        && url.matches('https://firebasestorage[.]googleapis[.]com/v0/b/[^/]+/o/members%2F' + data.ownerId + '%2Fsessions%2F' + data.id + '%2F' + photoId + '%2F' + size + '[.]webp[?].*');
+    }
+    function validMemberSession(data) {
+      return data.keys().hasAll(['ownerId','shareLocation'])
+        && data.ownerId is string && data.ownerId.matches('[A-Za-z0-9_-]{1,128}')
+        && data.id.matches('[A-Za-z0-9_-]{1,100}') && data.slug == data.id
+        && data.shareLocation is bool && data.photos.size() == 0 && data.photoCount is int && data.photoCount >= 0 && data.photoCount <= 12
+        && (data.shareLocation || (data.get('gps', null) == null && data.location == '위치 비공개'))
+        && data.get('gdriveFolderRef', '') == ''
+        && (data.get('coverImageId', '') == '' || data.coverImageId.matches('[A-Za-z0-9_-]{1,100}'))
+        && (data.get('coverImageUrl', '') == '' || validPhotoUrl(data.coverImageUrl, data, data.coverImageId, 'medium'))
+        ;
+    }
+    function validReport(data) {
+      return data.keys().hasAll(['reporterId','sessionId','reason','status','createdAt'])
+        && data.keys().hasOnly(['reporterId','sessionId','reason','status','createdAt'])
+        && data.reporterId is string && data.reporterId.size() <= 128
+        && data.sessionId is string && data.sessionId.matches('[A-Za-z0-9_-]{1,100}')
+        && data.reason in ['개인정보·위치 노출','저작권 침해','부적절한 사진·내용','광고·스팸','기타']
+        && data.status in ['open','resolved'] && data.createdAt is timestamp;
+    }
+    match /config/community { allow get: if true; allow list, write: if false; }
+    match /members/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid && communityOpen()
+        && request.auth.token.email_verified == true
+        && validMember(request.resource.data) && request.resource.data.acceptedAt == request.time
+        && request.resource.data.deleting == false;
+      allow update: if request.auth != null && request.auth.uid == uid && validMember(request.resource.data)
+        && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleting'])
+          && request.resource.data.deleting == true)
+        || (communityOpen() && resource.data.deleting == false && request.resource.data.deleting == false
+          && request.resource.data.acceptedAt == request.time));
     }
     match /sessions/{sessionId} {
-      allow get: if resource == null || isAdmin() || resource.data.isPublished == true;
-      allow list: if isAdmin() || resource.data.isPublished == true;
-      allow create: if isAdmin() && validSession(request.resource.data, sessionId);
-      allow update: if isAdmin() && validSession(request.resource.data, sessionId)
+      allow get: if resource == null || isAdmin() || owns(resource.data) || resource.data.isPublished == true;
+      allow list: if isAdmin() || owns(resource.data) || resource.data.isPublished == true;
+      allow create: if validSession(request.resource.data, sessionId)
+        && (isAdmin() || (activeMember() && owns(request.resource.data) && validMemberSession(request.resource.data)));
+      allow update: if validSession(request.resource.data, sessionId)
         && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.slug == resource.data.slug;
-      allow delete: if isAdmin();
+        && request.resource.data.slug == resource.data.slug
+        && request.resource.data.get('ownerId', '') == resource.data.get('ownerId', '')
+        && (isAdmin() || (activeMember() && owns(resource.data) && validMemberSession(request.resource.data)));
+      allow delete: if isAdmin() || owns(resource.data);
+      match /photos/{photoId} {
+        function parent() { return get(/databases/$(database)/documents/sessions/$(sessionId)).data; }
+        function parentAfter() { return getAfter(/databases/$(database)/documents/sessions/$(sessionId)).data; }
+        allow read: if isAdmin() || owns(parent()) || (parent().isPublished == true
+          && (parent().shareLocation == true || resource.data.gps == null));
+        allow create, update: if (isAdmin() || (activeMember() && owns(parentAfter())))
+          && request.resource.data.id == photoId
+          && validPhoto(request.resource.data, parentAfter());
+        allow delete: if isAdmin() || owns(parent());
+      }
+    }
+    match /reports/{reportId} {
+      allow get: if isAdmin() || (request.auth != null && (resource == null || resource.data.reporterId == request.auth.uid));
+      allow list: if isAdmin() || (request.auth != null && resource.data.reporterId == request.auth.uid);
+      allow create: if activeMember() && validReport(request.resource.data)
+        && request.resource.data.reporterId == request.auth.uid
+        && reportId == request.auth.uid + '_' + request.resource.data.sessionId
+        && request.resource.data.status == 'open' && request.resource.data.createdAt == request.time
+        && get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.isPublished == true;
+      allow update: if isAdmin() && validReport(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+      allow delete: if isAdmin() || (request.auth != null && resource.data.reporterId == request.auth.uid);
     }
   }
 }

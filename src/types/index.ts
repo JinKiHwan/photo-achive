@@ -44,10 +44,12 @@ export interface PhotoItem {
 }
 
 export interface PhotoSession {
+  ownerId?: string; // Missing only on legacy administrator posts.
+  shareLocation?: boolean;
   id: string;
   slug: string;
   title: string;
-  date: string; // YYYY-MM-DD
+  date: string; // Shooting date, YYYY-MM-DD
   location: string;
   gps?: GeoLocation | null;
   weather?: string;
@@ -58,7 +60,7 @@ export interface PhotoSession {
   isPublished: boolean;
   gdriveFolderRef?: string;
   photos: PhotoItem[];
-  createdAt: string;
+  createdAt: string; // First session upload/save timestamp; preserved on edits
   updatedAt: string;
 }
 

@@ -1,12 +1,17 @@
 "use client";
 
+import { formatUploadDate } from "@/lib/dates";
+
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, Loader2, X } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { PhotoSession } from "@/types";
 import { formatAperture, formatPhotoFocalLength } from "@/lib/photo-metadata";
+import { isValidGps, viewingPhotoGps } from "@/lib/geo";
+import { ReportButton } from "./ReportButton";
+import { PhotoLocationDialog } from "./PhotoLocationDialog";
 import styles from "./PhotobookViewer.module.css";
 
 export function PhotobookViewer({ session }: { session: PhotoSession }) {
@@ -16,6 +21,7 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
   const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [expanded, setExpanded] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const rootRef = useRef<HTMLElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -23,6 +29,7 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
   const activePhoto = photos[activeIndex] || photos[0];
   const activeSource = activePhoto?.urls.large || activePhoto?.urls.medium || "";
   const nextPhoto = photos[activeIndex + 1];
+  const activeGps = viewingPhotoGps(activePhoto, session);
 
   useEffect(() => {
     if (!expanded) return;
@@ -74,9 +81,9 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (expanded) return;
+    if (expanded || locationOpen) return;
     const target = event.target as HTMLElement;
-    if (target.closest("a")) return;
+    if (target.closest("a, aside")) return;
     const index = event.key === "ArrowRight" ? activeIndex + 1
       : event.key === "ArrowLeft" ? activeIndex - 1
       : event.key === "Home" ? 0
@@ -120,8 +127,17 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
         <Link href="/" className={styles.back} aria-label="출사 목록으로 돌아가기" title="목록으로">
           <ArrowLeft size={22} aria-hidden="true" />
         </Link>
-        <h1 className="sr-only">{session.title}</h1>
+        <div className={styles.sessionDates}>
+          <div className={styles.dateRow}>
+          <span>촬영일 {session.date}</span>
+          <span>업로드일 {formatUploadDate(session.createdAt)}</span>
+          </div>
+          <button type="button" className={styles.locationButton} disabled={!activeGps} onClick={() => setLocationOpen(true)}>
+            <MapPin size={14} />{activeGps ? "위치 보기" : "위치 정보 없음"}
+          </button>
+        </div>
 
+        <div className={styles.content}>
         <div className={styles.stage} aria-busy={Boolean(activePhoto && !loadedImages[activeSource] && !failedImages[activeSource])}>
           <AnimatePresence initial={false}>
             {activePhoto ? (
@@ -157,6 +173,7 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
                       onError={() => setFailedImages(current => ({...current, [activeSource]: true}))}
                     />
                     </button>
+                    <div className={styles.hoverCaption}>{activePhoto.caption?.trim() || "캡션없음"}</div>
                   </div>
                   <figcaption className={styles.metadata}>
                     <p className={styles.cameraLine}><span>Shot on </span><strong>{activePhoto.exif?.camera || session.camera || "-"}</strong></p>
@@ -171,6 +188,12 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
               </motion.div>
             ) : <p className={styles.empty}>아직 등록된 사진이 없습니다.</p>}
           </AnimatePresence>
+        </div>
+        <aside className={styles.story} aria-label="출사 이야기" tabIndex={0}>
+          <h1>{session.title}</h1>
+          {session.description && <p>{session.description}</p>}
+          <ReportButton sessionId={session.id} />
+        </aside>
         </div>
 
         {activePhoto && (
@@ -195,6 +218,9 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
           </>
         )}
       </div>
+      {locationOpen && activeGps && <PhotoLocationDialog gps={activeGps}
+        label={isValidGps(activePhoto?.gps) ? "현재 사진의 위치" : "출사 대표 위치"}
+        onClose={() => setLocationOpen(false)} />}
       {expanded && activePhoto && (
         <dialog ref={dialogRef} className={styles.lightbox} aria-label="사진 크게 보기"
           onCancel={() => setExpanded(false)} onClick={event => { if (event.target === event.currentTarget) setExpanded(false); }}>

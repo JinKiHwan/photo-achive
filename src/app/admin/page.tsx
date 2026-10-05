@@ -1,5 +1,7 @@
 "use client";
 
+import { formatUploadDate } from "@/lib/dates";
+
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -26,36 +28,39 @@ export default function AdminDashboardPage() {
   const [sessions, setSessions] = useState<PhotoSession[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      router.push("/admin/login");
-      return;
-    }
+  const [error, setError] = useState("");
 
-    loadSessions();
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAdmin) { router.push("/admin/login"); return; }
+    let cancelled = false;
+    void fetchSessions(false).then(data => { if (!cancelled) setSessions(data); })
+      .catch(() => { if (!cancelled) setError("사진집 목록을 불러오지 못했습니다. 다시 시도해 주세요."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [isAdmin, authLoading, router]);
 
   const loadSessions = async () => {
-    setLoading(true);
-    const data = await fetchSessions(false); // Fetch ALL including unpublished drafts
-    setSessions(data);
-    setLoading(false);
+    setError(""); setLoading(true);
+    try { setSessions(await fetchSessions(false)); }
+    catch { setError("사진집 목록을 불러오지 못했습니다. 다시 시도해 주세요."); }
+    finally { setLoading(false); }
   };
 
   const handleTogglePublish = async (session: PhotoSession) => {
     const updated = { ...session, isPublished: !session.isPublished };
-    await saveSession(updated);
-    loadSessions();
+    try { await saveSession(updated); await loadSessions(); }
+    catch { setError("공개 상태를 변경하지 못했습니다. 다시 시도해 주세요."); }
   };
 
   const handleDelete = async (id: string, title: string) => {
     if (confirm(`'${title}' 출사 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
-      await deleteSession(id);
-      loadSessions();
+      try { await deleteSession(id); await loadSessions(); }
+      catch { setError("사진집 삭제를 완료하지 못했습니다. 다시 시도해 주세요."); }
     }
   };
 
-  if (authLoading || loading) {
+  if (authLoading || !isAdmin || loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center text-xs text-zinc-500 font-mono">
         불러오는 중...
@@ -65,6 +70,7 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">
+      {error && <p role="alert" className="text-sm text-rose-300">{error} <button onClick={() => void loadSessions()} className="underline">다시 불러오기</button></p>}
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
         <div>
@@ -83,6 +89,7 @@ export default function AdminDashboardPage() {
         </Link>
       </div>
 
+      <Link href="/admin/reports" className="inline-block text-sm underline text-zinc-300">신고 관리</Link>
       {/* Sessions Table / Cards */}
       <div className="space-y-4">
         {sessions.map((session) => {
@@ -109,7 +116,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span
                       className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded border ${
                         session.isPublished
@@ -129,8 +136,9 @@ export default function AdminDashboardPage() {
                     </span>
 
                     <span className="text-xs text-zinc-500 font-mono flex items-center gap-1">
-                      <Calendar className="w-3 h-3" /> {session.date}
+                      <Calendar className="w-3 h-3" /> 촬영일 {session.date}
                     </span>
+                    <span className="text-xs text-zinc-500 font-mono">업로드일 {formatUploadDate(session.createdAt)}</span>
                     <span className="text-xs text-zinc-500 font-mono flex items-center gap-1">
                       <Images className="w-3 h-3" /> {session.photos?.length || 0} 장
                     </span>

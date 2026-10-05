@@ -8,7 +8,7 @@ import { Camera, Lock, LogOut, Plus, Settings } from "lucide-react";
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
-  const { isAdmin, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
 
   if (pathname.startsWith("/sessions/")) return null;
 
@@ -17,14 +17,14 @@ export const Header: React.FC = () => {
   if (pathname === "/") {
     return (
       <div className="absolute top-6 right-6 z-40">
-        {isAdmin ? (
+        {user ? (
           <div className="flex items-center gap-3">
             <Link
-              href="/admin"
+              href={isAdmin ? "/admin" : "/my"}
               className="flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-zinc-900/80 backdrop-blur-md border border-zinc-800 px-3 py-1.5 rounded-full transition shadow-lg"
             >
               <Settings className="w-3.5 h-3.5" />
-              <span>관리자</span>
+              <span>{isAdmin ? "관리자" : "내 사진"}</span>
             </Link>
             <button
               onClick={() => logout()}
@@ -36,9 +36,9 @@ export const Header: React.FC = () => {
           </div>
         ) : (
           <Link
-            href="/admin/login"
+            href="/login"
             className="p-2 rounded-full bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800/80 text-zinc-500 hover:text-zinc-200 transition backdrop-blur-md block"
-            title="관리자 로그인"
+            title="로그인"
           >
             <Lock className="w-3.5 h-3.5" />
           </Link>
@@ -94,14 +94,16 @@ export const Header: React.FC = () => {
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
+          ) : user ? (
+            <div className="flex gap-4 text-xs"><Link href="/my">내 사진</Link><Link href="/my/new">사진 올리기</Link><button onClick={() => void logout()}>로그아웃</button></div>
           ) : (
             <Link
-              href="/admin/login"
+              href="/login"
               className="text-zinc-500 hover:text-zinc-300 transition text-xs flex items-center gap-1.5"
-              title="관리자 로그인"
+              title="로그인"
             >
               <Lock className="w-3.5 h-3.5" />
-              <span className="sr-only">관리자 로그인</span>
+              <span>로그인</span>
             </Link>
           )}
         </nav>

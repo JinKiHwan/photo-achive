@@ -1,14 +1,35 @@
 rules_version = '2';
+// Legacy admin assets stay in sessions/. Member assets are isolated by UID.
 service firebase.storage {
   match /b/{bucket}/o {
     function isAdmin() { return request.auth != null && request.auth.uid == '8eI45u6PWlWlEdZ1c5qfBH0lHMW2'; }
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function activeMember(uid) {
+      return owner(uid)
+        && firestore.get(/databases/(default)/documents/config/community).data.enabled == true
+        && firestore.get(/databases/(default)/documents/members/$(uid)).data.deleting == false
+        && firestore.get(/databases/(default)/documents/members/$(uid)).data.policyVersion == '2026-10-04';
+    }
+    function validImage(fileName) {
+      return fileName in ['thumb.webp','medium.webp','large.webp']
+        && request.resource.size > 0 && request.resource.size <= 15 * 1024 * 1024
+        && request.resource.contentType == 'image/webp';
+    }
     match /sessions/{sessionId}/{photoId}/{fileName} {
       allow read: if isAdmin() || (firestore.exists(/databases/(default)/documents/sessions/$(sessionId))
         && firestore.get(/databases/(default)/documents/sessions/$(sessionId)).data.isPublished == true);
-      allow create, update: if isAdmin() && fileName in ['thumb.webp','medium.webp','large.webp']
-        && request.resource.size <= 15 * 1024 * 1024
-        && request.resource.contentType == 'image/webp';
+      allow create, update: if isAdmin() && validImage(fileName);
       allow delete: if isAdmin();
     }
+    match /sessions/{allPaths=**} { allow list: if isAdmin(); }
+    match /members/{uid}/sessions/{sessionId}/{photoId}/{fileName} {
+      allow get: if owner(uid) || isAdmin() || (
+        firestore.get(/databases/(default)/documents/sessions/$(sessionId)).data.ownerId == uid
+        && firestore.get(/databases/(default)/documents/sessions/$(sessionId)).data.isPublished == true);
+      allow create, update: if (activeMember(uid) || isAdmin()) && validImage(fileName)
+        && sessionId.matches('[A-Za-z0-9_-]{1,100}') && photoId.matches('[A-Za-z0-9_-]{1,100}');
+      allow delete: if owner(uid) || isAdmin();
+    }
+    match /members/{uid}/{allPaths=**} { allow list: if owner(uid) || isAdmin(); }
   }
 }

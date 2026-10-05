@@ -71,3 +71,13 @@ test('reads GPS from original JPEG metadata with both hemispheres and tolerates 
   assert.deepEqual(await exifr.gps(jpegWithGps('S', 'W')), { latitude: -37.5, longitude: -127.25 });
   assert.equal(await exifr.gps(Buffer.from([0xff, 0xd8, 0xff, 0xd9])), undefined);
 });
+
+test('viewer uses only active photo GPS then explicit session GPS, never another photo', () => {
+  const photo = { gps: gps(0, 0) };
+  const session = { gps: gps(50, 60), coverImageId: 'cover', photos: [{ id: 'cover', gps: gps(30, 40) }] };
+  assert.equal(api.exports.viewingPhotoGps(photo, session), photo.gps);
+  assert.equal(api.exports.viewingPhotoGps({ gps: gps(91) }, session), session.gps);
+  assert.equal(api.exports.viewingPhotoGps(undefined, session), session.gps);
+  session.gps = null;
+  assert.equal(api.exports.viewingPhotoGps({}, session), undefined);
+});

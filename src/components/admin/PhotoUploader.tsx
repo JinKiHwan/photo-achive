@@ -12,10 +12,13 @@ import { UploadCloud, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
 interface PhotoUploaderProps {
   sessionId: string;
+  ownerId?: string;
+  remaining?: number;
+  onBusyChange?: (busy: boolean) => void;
   onPhotosUploaded: (newPhotos: PhotoItem[]) => void;
 }
 
-export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ sessionId, onPhotosUploaded }) => {
+export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ sessionId, ownerId, remaining = 500, onBusyChange, onPhotosUploaded }) => {
   const [uploading, setUploading] = useState(false);
   const uploadLock = useRef(false);
   const [progresses, setProgresses] = useState<Record<string, CompressionProgress>>({});
@@ -24,9 +27,11 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ sessionId, onPhoto
     const files = Array.from(e.target.files || []);
     if (files.length === 0 || uploadLock.current) return;
     e.target.value = "";
+    if (files.length > remaining) { alert(`사진은 ${remaining}장 더 추가할 수 있습니다.`); return; }
 
     uploadLock.current = true;
     setUploading(true);
+    onBusyChange?.(true);
     const batchId = Date.now();
     const jobs = files.map((file, index) => ({ file, photoId: `photo_${batchId}_${index}_${Math.random().toString(36).substring(2, 7)}` }));
     const device = navigator as Navigator & { deviceMemory?: number };
@@ -59,7 +64,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ sessionId, onPhoto
           [photoId]: { fileName: file.name, stage: "uploading", progress: 90 },
         }));
 
-        const { urls, storagePaths } = await uploadPhotoImages(sessionId, photoId, compressed);
+        const { urls, storagePaths } = await uploadPhotoImages(sessionId, photoId, compressed, ownerId);
 
         const newPhotoItem: PhotoItem = {
           id: photoId,
@@ -101,6 +106,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({ sessionId, onPhoto
     } finally {
       uploadLock.current = false;
       setUploading(false);
+      onBusyChange?.(false);
     }
   };
 

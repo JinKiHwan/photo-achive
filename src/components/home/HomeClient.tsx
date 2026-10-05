@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { fetchSessions } from "@/lib/db";
 import { isFirebaseConfigured } from "@/lib/firebase";
@@ -81,7 +81,10 @@ export const HomeClient: React.FC<HomeClientProps> = ({ initialSessions }) => {
     });
   };
 
-  const visibleSessions = sessions.slice(0, displayedCount);
+  const sortedSessions = useMemo(() => [...sessions].sort((a, b) =>
+    (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)
+  ), [sessions]);
+  const visibleSessions = sortedSessions.slice(0, displayedCount);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12 md:py-16 space-y-12 min-h-screen flex flex-col items-center relative">
@@ -101,7 +104,7 @@ export const HomeClient: React.FC<HomeClientProps> = ({ initialSessions }) => {
           document.getElementById(`${next}-tab`)?.focus();
         }} className={`rounded-full px-6 py-2 text-sm transition ${tab === view ? "bg-zinc-100 text-zinc-950" : "text-zinc-400 hover:text-white"}`}>{view === "gallery" ? "사진 모아보기" : "지구본으로 보기"}</button>)}
       </div>
-      {tab === "globe" ? <GlobeView sessions={sessions} /> : <>
+      {tab === "globe" ? <GlobeView sessions={sortedSessions} /> : <>
       <div id="gallery-panel" role="tabpanel" aria-labelledby="gallery-tab" className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
         {visibleSessions.map((session, index) => (
           <SessionCard key={session.id} session={session} index={index} />
