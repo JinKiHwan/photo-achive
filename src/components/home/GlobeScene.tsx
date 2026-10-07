@@ -2,21 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Globe, { GlobeMethods } from "react-globe.gl";
-import { AmbientLight, DirectionalLight, MeshPhongMaterial } from "three";
+import { AmbientLight, DirectionalLight } from "three";
 import { GeoLocation } from "@/types";
 
 export type GlobePoint = GeoLocation & { id: string; title: string };
 const streetTiles = (x: number, y: number, level: number) => `https://tile.openstreetmap.org/${level}/${x}/${y}.png`;
-export default function GlobeScene({ points, activeId, overviewRequest, onSelect }: { points: GlobePoint[]; activeId: string | null; overviewRequest: number; onSelect: (id: string) => void }) {
+export default function GlobeScene({ points, activeId, overviewRequest, center, radiusKm = 50, onSelect }: { points: GlobePoint[]; activeId: string | null; overviewRequest: number; center?: GeoLocation | null; radiusKm?: number; onSelect: (id: string) => void }) {
   const ref = useRef<GlobeMethods | undefined>(undefined);
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
   const [ready, setReady] = useState(false);
   const [detailedId, setDetailedId] = useState<string | null>(null);
   const [transition, setTransition] = useState<{ image: string; id: string; fading: boolean } | null>(null);
-  const showDetails = activeId ? detailedId === activeId : overviewRequest === 0;
-  const [material] = useState(() => new MeshPhongMaterial({ color: "#ffffff", shininess: 18, specular: "#263b4e" }));
-  useEffect(() => () => material.dispose(), [material]);
+  const showDetails = activeId ? detailedId === activeId : Boolean(center);
   useEffect(() => {
     let frame: number;
     const initialize = () => {
@@ -47,9 +45,9 @@ export default function GlobeScene({ points, activeId, overviewRequest, onSelect
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) globe.controls().autoRotate = false;
     if (!point) {
-      globe.pointOfView(overviewRequest > 0
-        ? { lat: 25, lng: 125, altitude: 2.2 }
-        : { lat: 36.5, lng: 127.8, altitude: 0.12 }, reduced ? 0 : 1000);
+      globe.pointOfView(center
+        ? { lat: center.latitude, lng: center.longitude, altitude: Math.max(0.008, radiusKm / 1000) }
+        : { lat: 25, lng: 125, altitude: 2.2 }, reduced ? 0 : 1000);
       return;
     }
     const target = { lat: point.latitude, lng: point.longitude, altitude: 0.002 };
@@ -78,7 +76,7 @@ export default function GlobeScene({ points, activeId, overviewRequest, onSelect
     const controls = globe.controls();
     controls.addEventListener("start", onInteraction);
     return () => { interrupt(); controls.removeEventListener("start", onInteraction); };
-  }, [activeId, points, ready, overviewRequest]);
+  }, [activeId, points, ready, overviewRequest, center, radiusKm]);
   useEffect(() => {
     if (!activeId || detailedId !== activeId) return;
     const started = performance.now();
@@ -90,7 +88,7 @@ export default function GlobeScene({ points, activeId, overviewRequest, onSelect
         const mesh = object as import("three").Mesh;
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         for (const material of materials) {
-          const image = (material as MeshPhongMaterial | undefined)?.map?.image as HTMLImageElement | undefined;
+          const image = (material as { map?: { image?: HTMLImageElement } } | undefined)?.map?.image;
           if (image?.src?.includes("tile.openstreetmap.org") && image.complete && image.naturalWidth > 0) loaded = true;
         }
       });
@@ -140,7 +138,7 @@ export default function GlobeScene({ points, activeId, overviewRequest, onSelect
     <div className="relative" data-view={showDetails ? "details" : "earth"}>
     <Globe ref={ref} width={width} height={Math.min(620, Math.max(380, width * 0.58))}
       backgroundColor="rgba(0,0,0,0)" globeImageUrl="/images/globe/earth-blue-marble.jpg"
-      globeMaterial={material} globeTileEngineUrl={showDetails ? streetTiles : null}
+      globeTileEngineUrl={showDetails ? streetTiles : null}
       globeCurvatureResolution={2} atmosphereColor="#769eda" atmosphereAltitude={0.12} animateIn={false} waitForGlobeReady={false}
       onGlobeReady={() => setReady(true)} htmlElementsData={points} htmlLat="latitude" htmlLng="longitude"
       htmlAltitude={0} htmlElement={createPin} htmlTransitionDuration={0} />

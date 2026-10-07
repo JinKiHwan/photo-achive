@@ -11,6 +11,7 @@ import { SessionForm } from "./SessionForm";
 export function MemberEditor({ id }: { id?: string }) {
   const { user, loading, isAdmin } = useAuth();
   const uid = user && "uid" in user ? user.uid : undefined;
+  const googleUser = Boolean(user && "providerData" in user && user.providerData.some(provider => provider.providerId === "google.com"));
   const [state, setState] = useState<{ uid?: string; ready: boolean; session?: PhotoSession; error?: string }>({ ready: false });
   useEffect(() => {
     if (!uid || !membershipEnabled) return;
@@ -29,6 +30,7 @@ export function MemberEditor({ id }: { id?: string }) {
   if (loading) return <p className="p-12">로그인 확인 중…</p>;
   if (!uid) return <p className="p-12"><Link href="/login" className="underline">로그인 후 사진을 올릴 수 있습니다.</Link></p>;
   if (isAdmin) return <p className="p-12"><Link href="/admin" className="underline">관리자 사진 관리로 이동</Link></p>;
+  if (!googleUser) return <p className="p-12"><Link href="/login" className="underline">Google 계정으로 로그인한 후 사진을 올려 주세요.</Link></p>;
   if (!membershipEnabled) return <p className="p-12">회원 서비스 준비 중입니다.</p>;
   if (state.error) return <div className="p-12 space-y-4"><p role="alert">{state.error}</p><Link href="/my" className="underline">내 사진</Link> · <Link href="/login" className="underline">가입 절차</Link></div>;
   if (!state.ready || state.uid !== uid) return <p className="p-12">불러오는 중…</p>;

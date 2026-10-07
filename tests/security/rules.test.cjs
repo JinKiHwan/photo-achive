@@ -13,7 +13,7 @@ const photo = (i, owner='alice', id='post') => {
     storagePaths:Object.fromEntries(names.map(n => [n,`${base}/${n}.webp`])),
     urls:Object.fromEntries(names.map(n=>[n,`https://firebasestorage.googleapis.com/v0/b/demo-photo-archive.appspot.com/o/${encodeURIComponent(`${base}/${n}.webp`)}?alt=media&token=test`])) };
 };
-const user = uid => env.authenticatedContext(uid, {email_verified:true});
+const user = uid => env.authenticatedContext(uid, {email_verified:true, firebase:{sign_in_provider:'google.com'}});
 const db = uid => user(uid).firestore();
 before(async () => {
   env = await initializeTestEnvironment({projectId:'demo-photo-archive', firestore:{host:'127.0.0.1',port:8085,rules:fs.readFileSync('firestore.rules','utf8')}, storage:{host:'127.0.0.1',port:9195,rules:fs.readFileSync('storage.rules','utf8')}});
@@ -119,4 +119,22 @@ test('storage enforces ownership, content type, private reads and delete/list sc
   await assertFails(listAll(ref(user('bob').storage(),'members/alice')));
   await assertFails(deleteObject(ref(user('bob').storage(),path)));
   await assertSucceeds(deleteObject(mine));
+});
+
+test('password and anonymous identities cannot register, publish or upload even with a member profile', async()=>{
+  for (const provider of ['password', 'anonymous']) {
+    const context=env.authenticatedContext('alice',{email_verified:true,firebase:{sign_in_provider:provider}});
+    await assertFails(setDoc(doc(context.firestore(),'sessions/new'),session('alice','new')));
+    await assertFails(uploadBytes(ref(context.storage(),'members/alice/sessions/post/photo_0/large.webp'),new Uint8Array([1]),{contentType:'image/webp'}));
+    const newcomer=env.authenticatedContext('fresh',{email_verified:true,firebase:{sign_in_provider:provider}});
+    await assertFails(setDoc(doc(newcomer.firestore(),'members/fresh'),{policyVersion:'2026-10-04',acceptedAt:serverTimestamp(),deleting:false}));
+  }
+});
+test('clients cannot inspect voter identifiers or forge aggregate like counts', async()=>{
+  for(const store of [db('alice'),db(admin),env.unauthenticatedContext().firestore()]) {
+    for(const path of ['likeStats/public','likeVotes/public/voters/hash']) {
+      await assertFails(setDoc(doc(store,path),{count:999,liked:true}));
+      await assertFails(getDoc(doc(store,path)));
+    }
+  }
 });

@@ -81,3 +81,15 @@ test('viewer uses only active photo GPS then explicit session GPS, never another
   session.gps = null;
   assert.equal(api.exports.viewingPhotoGps({}, session), undefined);
 });
+
+test('nearby discovery sorts by distance, respects radius and excludes private or demo locations',()=>{
+  const origin=gps(37,127);
+  const post=(id, point, extra={})=>({id,isPublished:true,gps:point,photos:[],...extra});
+  const sessions=[post('far',gps(38,127)),post('near',gps(37.01,127)),post('here',origin),post('hidden',origin,{shareLocation:false}),post('draft',origin,{isPublished:false}),post('demo',{...origin,source:'demo'}),post('missing',null)];
+  const result=api.exports.nearbySessions(sessions,origin,50);
+  assert.deepEqual(result.map(item=>item.session.id),['here','near']);
+  assert.equal(result[0].distance,0);
+  assert.ok(result[1].distance>1 && result[1].distance<1.2);
+  assert.equal(api.exports.sessionGps(sessions[3]),undefined);
+  assert.ok(api.exports.distanceKm(gps(0,179.9),gps(0,-179.9))<23);
+});

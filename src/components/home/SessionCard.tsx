@@ -4,14 +4,19 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { PhotoSession } from "@/types";
+import { LikeButton } from "@/components/social/LikeButton";
+import type { LikeState } from "@/hooks/useLikes";
 import { motion } from "framer-motion";
 
 interface SessionCardProps {
   session: PhotoSession;
   index: number;
+  like?: LikeState;
+  likesError?: string;
+  onLike: (id: string, state: LikeState) => void;
 }
 
-export const SessionCard: React.FC<SessionCardProps> = ({ session, index }) => {
+export const SessionCard: React.FC<SessionCardProps> = ({ session, index, like, likesError, onLike }) => {
   const coverUrl =
     session.coverImageUrl ||
     (session.photos && session.photos[0]?.urls.medium) ||
@@ -47,6 +52,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({ session, index }) => {
           </h2>
         </div>
       </Link>
+      <div className="mt-2 flex justify-center"><LikeButton sessionId={session.id} state={like} unavailable={likesError} onChange={onLike} /></div>
     </motion.article>
   );
 };

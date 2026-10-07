@@ -18,7 +18,8 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/config/community).data.enabled == true;
     }
     function activeMember() {
-      return request.auth != null && communityOpen()
+      return request.auth != null && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email_verified == true && communityOpen()
         && exists(/databases/$(database)/documents/members/$(request.auth.uid))
         && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.deleting == false
         && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.policyVersion == '2026-10-04';
@@ -112,11 +113,16 @@ service cloud.firestore {
         && data.reason in ['개인정보·위치 노출','저작권 침해','부적절한 사진·내용','광고·스팸','기타']
         && data.status in ['open','resolved'] && data.createdAt is timestamp;
     }
+    // Server-owned aggregates and per-post HMAC(IP) votes; never client-readable/writable.
+    // likeStats/{sessionId}: count. likeVotes/{sessionId}/voters/{hash}: liked, updatedAt.
+    match /likeStats/{id} { allow read, write: if false; }
+    match /likeVotes/{id}/{rest=**} { allow read, write: if false; }
     match /config/community { allow get: if true; allow list, write: if false; }
     match /members/{uid} {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid && communityOpen()
         && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
         && validMember(request.resource.data) && request.resource.data.acceptedAt == request.time
         && request.resource.data.deleting == false;
       allow update: if request.auth != null && request.auth.uid == uid && validMember(request.resource.data)

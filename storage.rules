@@ -6,6 +6,8 @@ service firebase.storage {
     function owner(uid) { return request.auth != null && request.auth.uid == uid; }
     function activeMember(uid) {
       return owner(uid)
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email_verified == true
         && firestore.get(/databases/(default)/documents/config/community).data.enabled == true
         && firestore.get(/databases/(default)/documents/members/$(uid)).data.deleting == false
         && firestore.get(/databases/(default)/documents/members/$(uid)).data.policyVersion == '2026-10-04';

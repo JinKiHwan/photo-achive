@@ -10,6 +10,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { PhotoSession } from "@/types";
 import { formatAperture, formatPhotoFocalLength } from "@/lib/photo-metadata";
 import { isValidGps, viewingPhotoGps } from "@/lib/geo";
+import { PostLikeButton } from "@/components/social/LikeButton";
 import { ReportButton } from "./ReportButton";
 import { PhotoLocationDialog } from "./PhotoLocationDialog";
 import styles from "./PhotobookViewer.module.css";
@@ -192,6 +193,7 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
         <aside className={styles.story} aria-label="출사 이야기" tabIndex={0}>
           <h1>{session.title}</h1>
           {session.description && <p>{session.description}</p>}
+          {session.isPublished && <PostLikeButton sessionId={session.id} />}
           <ReportButton sessionId={session.id} />
         </aside>
         </div>

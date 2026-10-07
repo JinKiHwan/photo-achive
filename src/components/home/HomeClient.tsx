@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
+import { useLikes } from "@/hooks/useLikes";
 import { fetchSessions } from "@/lib/db";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { PhotoSession } from "@/types";
@@ -22,6 +23,8 @@ export const HomeClient: React.FC<HomeClientProps> = ({ initialSessions }) => {
   useEffect(() => {
     if (!isFirebaseConfigured) void fetchSessions(true).then(setSessions);
   }, []);
+  const [sort, setSort] = useState<"latest" | "popular">("latest");
+  const { likes, update: updateLike, ready: likesReady, error: likesError } = useLikes(sessions.map(session => session.id));
   const [displayedCount, setDisplayedCount] = useState(BATCH_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -82,8 +85,9 @@ export const HomeClient: React.FC<HomeClientProps> = ({ initialSessions }) => {
   };
 
   const sortedSessions = useMemo(() => [...sessions].sort((a, b) =>
+    (sort === "popular" && likesReady ? (likes[b.id]?.count ?? 0) - (likes[a.id]?.count ?? 0) : 0) ||
     (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)
-  ), [sessions]);
+  ), [sessions, sort, likes, likesReady]);
   const visibleSessions = sortedSessions.slice(0, displayedCount);
 
   return (
@@ -102,12 +106,17 @@ export const HomeClient: React.FC<HomeClientProps> = ({ initialSessions }) => {
           const next = event.key === "Home" ? "gallery" : event.key === "End" ? "globe" : view === "gallery" ? "globe" : "gallery";
           setTab(next);
           document.getElementById(`${next}-tab`)?.focus();
-        }} className={`rounded-full px-6 py-2 text-sm transition ${tab === view ? "bg-zinc-100 text-zinc-950" : "text-zinc-400 hover:text-white"}`}>{view === "gallery" ? "사진 모아보기" : "지구본으로 보기"}</button>)}
+        }} className={`rounded-full px-6 py-2 text-sm transition ${tab === view ? "bg-zinc-100 text-zinc-950" : "text-zinc-400 hover:text-white"}`}>{view === "gallery" ? "리스트" : "내 주변 출사 보기"}</button>)}
       </div>
       {tab === "globe" ? <GlobeView sessions={sortedSessions} /> : <>
+      <div className="flex gap-6 border-b border-white/15 pb-3" aria-label="리스트 정렬">
+        {(["latest", "popular"] as const).map(value => <button key={value} type="button" aria-pressed={sort === value} onClick={() => { setSort(value); setDisplayedCount(BATCH_SIZE); }} className={`text-sm transition ${sort === value ? "text-white font-semibold" : "text-zinc-400 hover:text-white"}`}>{value === "latest" ? "최신순" : "인기순"}</button>)}
+      </div>
+      {likesError && <p role="status" className="text-xs text-zinc-400">{likesError}{sort === "popular" ? " 현재 최신순으로 표시합니다." : ""}</p>}
+      {sort === "popular" && !likesReady && !likesError && <p role="status" className="text-xs text-zinc-400">인기순을 불러오는 중…</p>}
       <div id="gallery-panel" role="tabpanel" aria-labelledby="gallery-tab" className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
         {visibleSessions.map((session, index) => (
-          <SessionCard key={session.id} session={session} index={index} />
+          <SessionCard key={session.id} session={session} index={index} like={likes[session.id]} likesError={likesError} onLike={updateLike} />
         ))}
       </div>
 
