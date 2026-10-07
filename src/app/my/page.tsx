@@ -6,6 +6,7 @@ import { deleteSession, fetchOwnedSessions } from "@/lib/db";
 import { withdrawMembership } from "@/lib/membership";
 import { membershipEnabled } from "@/lib/community-config";
 import type { PhotoSession } from "@/types";
+import { ProfileEditor } from "@/components/profile/ProfileEditor";
 
 export default function MyPhotosPage() {
   const { user, loading, isAdmin } = useAuth();
@@ -47,6 +48,7 @@ export default function MyPhotosPage() {
   if (isAdmin) return <p className="p-12"><Link href="/admin" className="underline">관리자 사진 관리로 이동</Link></p>;
   return <div className="mx-auto max-w-4xl px-6 py-12 space-y-8">
     <div className="flex items-center justify-between"><h1 className="text-3xl">내 사진</h1>{membershipEnabled && <Link href="/my/new" className="rounded bg-white px-4 py-2 text-black text-sm">새 출사 기록</Link>}</div>
+    {membershipEnabled && user && "uid" in user && <ProfileEditor user={user} />}
     {error && <div role="alert" className="text-rose-300 text-sm">{error} <button onClick={() => void reload()} className="underline">다시 불러오기</button></div>}
     {!sessions.length && <p className="text-zinc-400">아직 저장한 사진집이 없습니다.</p>}
     {sessions.filter(session => session.ownerId === uid).map(session => <article key={session.id} className="rounded-xl bg-zinc-950/80 border border-zinc-700 p-5 flex flex-wrap justify-between gap-4">
@@ -54,7 +56,7 @@ export default function MyPhotosPage() {
       <div className="flex items-center gap-4 text-sm">{session.isPublished && <Link href={`/sessions/${session.id}`}>보기</Link>}<Link href={`/my/${session.id}/edit`}>수정</Link><button disabled={busy} onClick={() => void remove(session)} className="text-rose-300 disabled:opacity-40">삭제</button></div>
     </article>)}
     <details className="border-t border-zinc-700 pt-6 text-sm space-y-4"><summary className="cursor-pointer text-zinc-400">회원 탈퇴</summary>
-      <p>계정, 내 사진집·사진 파일, 신고 내역과 약관 확인 기록을 삭제합니다. 복구할 수 없습니다. 계속하려면 아래에 ‘탈퇴’를 입력하세요. Google 계정 자체는 삭제되지 않습니다.</p>
+      <p>계정, 내 사진집·사진 파일, 공개 프로필, 작성 댓글, 신고 내역과 약관 확인 기록을 삭제합니다. 복구할 수 없습니다. 계속하려면 아래에 ‘탈퇴’를 입력하세요. Google 계정 자체는 삭제되지 않습니다.</p>
       <label className="block">탈퇴 확인<input value={withdrawText} onChange={e => setWithdrawText(e.target.value)} className="block mt-2 rounded bg-zinc-900 border border-zinc-600 p-2" /></label>
       <button disabled={busy || withdrawText !== "탈퇴"} onClick={() => void withdraw()} className="rounded bg-rose-950 border border-rose-700 px-4 py-2 disabled:opacity-40">{busy ? "처리 중…" : "Google 계정 확인 후 탈퇴"}</button>
     </details>

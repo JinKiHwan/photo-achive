@@ -5,12 +5,24 @@ rules_version = '2';
 // Optional: gps (bounded coordinates), weather, camera, covers, Drive link.
 // ID, slug, ownerId and createdAt are immutable. Legacy posts remain admin-only.
 // members/{uid}: private policyVersion, acceptedAt (timestamp), deleting (bool).
+// publicProfiles/{uid}: public, non-sensitive member profile.
+// Required: uid (document ID and owner UID), displayName (1..40 chars),
+// bio (0..300 chars), photoURL (empty or Google account image, <=2048 chars),
+// createdAt (immutable timestamp) and updatedAt (timestamp).
+// No email address, role or other private membership data is stored here.
 // reports/{uid_sessionId}: reporterId, sessionId, reason, createdAt, status.
 // config/community: trusted launch control, managed through Console only.
 // Member posts have ownerId, shareLocation, photoCount and an empty photos list.
 // sessions/{id}/photos/{photoId} contains individually validated photo metadata.
+// sessions/{id}/comments/{commentId}: public-post comments.
+// Required: id, sessionId, authorId, body (1..500 chars), createdAt, updatedAt.
+// Comment identity, parent, author and creation time are immutable.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isAuthenticated() { return request.auth != null; }
+    function isOwner(uid) { return isAuthenticated() && request.auth.uid == uid; }
+    function uidUnchanged() { return isAuthenticated() && request.resource.data.uid == request.auth.uid; }
+    function uidNotModified() { return request.resource.data.uid == resource.data.uid; }
     function isAdmin() { return request.auth != null && request.auth.uid == '8eI45u6PWlWlEdZ1c5qfBH0lHMW2'; }
     function owns(data) { return request.auth != null && data.get('ownerId', '') == request.auth.uid; }
     function communityOpen() {
@@ -57,6 +69,16 @@ service cloud.firestore {
         && data.policyVersion == '2026-10-04'
         && data.acceptedAt is timestamp && data.acceptedAt <= request.time
         && data.deleting is bool;
+    }
+    function validPublicProfile(data, uid) {
+      return data.keys().hasAll(['uid','displayName','bio','photoURL','createdAt','updatedAt'])
+        && data.keys().hasOnly(['uid','displayName','bio','photoURL','createdAt','updatedAt'])
+        && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128 && data.uid == uid
+        && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 40
+        && data.bio is string && data.bio.size() <= 300
+        && data.photoURL is string && data.photoURL.size() <= 2048
+        && (data.photoURL == '' || data.photoURL.matches('https://lh3[.]googleusercontent[.]com/.+'))
+        && data.createdAt is timestamp && data.updatedAt is timestamp;
     }
     function validExif(exif) {
       return exif is map && exif.keys().hasOnly(['deviceType','camera','lens','iso','aperture','shutter','focalLength','focalLength35mm','takenAt'])
@@ -113,6 +135,15 @@ service cloud.firestore {
         && data.reason in ['개인정보·위치 노출','저작권 침해','부적절한 사진·내용','광고·스팸','기타']
         && data.status in ['open','resolved'] && data.createdAt is timestamp;
     }
+    function validComment(data, sessionId, commentId) {
+      return data.keys().hasAll(['id','sessionId','authorId','body','createdAt','updatedAt'])
+        && data.keys().hasOnly(['id','sessionId','authorId','body','createdAt','updatedAt'])
+        && data.id is string && data.id.matches('[A-Za-z0-9_-]{1,100}') && data.id == commentId
+        && data.sessionId is string && data.sessionId.matches('[A-Za-z0-9_-]{1,100}') && data.sessionId == sessionId
+        && data.authorId is string && data.authorId.size() > 0 && data.authorId.size() <= 128
+        && data.body is string && data.body.size() > 0 && data.body.size() <= 500
+        && data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
     // Server-owned aggregates and per-post HMAC(IP) votes; never client-readable/writable.
     // likeStats/{sessionId}: count. likeVotes/{sessionId}/voters/{hash}: liked, updatedAt.
     match /likeStats/{id} { allow read, write: if false; }
@@ -130,6 +161,20 @@ service cloud.firestore {
           && request.resource.data.deleting == true)
         || (communityOpen() && resource.data.deleting == false && request.resource.data.deleting == false
           && request.resource.data.acceptedAt == request.time));
+    }
+    match /publicProfiles/{uid} {
+      // This collection intentionally contains only public, non-sensitive fields.
+      allow read: if true;
+      allow create: if activeMember() && isOwner(uid) && uidUnchanged()
+        && validPublicProfile(request.resource.data, uid)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if activeMember() && isOwner(uid) && uidNotModified()
+        && validPublicProfile(request.resource.data, uid)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      // A withdrawing member must still be able to remove their public profile.
+      allow delete: if isOwner(uid) || isAdmin();
     }
     match /sessions/{sessionId} {
       allow get: if resource == null || isAdmin() || owns(resource.data) || resource.data.isPublished == true;
@@ -152,6 +197,39 @@ service cloud.firestore {
           && validPhoto(request.resource.data, parentAfter());
         allow delete: if isAdmin() || owns(parent());
       }
+      match /comments/{commentId} {
+        function parent() {
+          return get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+        }
+        function publishedParent() {
+          return exists(/databases/$(database)/documents/sessions/$(sessionId))
+            && parent().isPublished == true;
+        }
+        allow read: if publishedParent() || isOwner(resource.data.authorId) || isAdmin()
+          || (exists(/databases/$(database)/documents/sessions/$(sessionId)) && owns(parent()));
+        allow create: if activeMember() && publishedParent()
+          && validComment(request.resource.data, sessionId, commentId)
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if activeMember() && publishedParent()
+          && isOwner(resource.data.authorId)
+          && validComment(request.resource.data, sessionId, commentId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.sessionId == resource.data.sessionId
+          && request.resource.data.authorId == resource.data.authorId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body','updatedAt'])
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if isOwner(resource.data.authorId) || isAdmin()
+          || (exists(/databases/$(database)/documents/sessions/$(sessionId)) && owns(parent()));
+      }
+    }
+    // Membership withdrawal queries every comments subcollection by authorId.
+    // The required equality filter lets Firestore prove that every returned
+    // document belongs to the authenticated author, including private parents.
+    match /{path=**}/comments/{commentId} {
+      allow list: if isAuthenticated() && resource.data.authorId == request.auth.uid;
     }
     match /reports/{reportId} {
       allow get: if isAdmin() || (request.auth != null && (resource == null || resource.data.reporterId == request.auth.uid));

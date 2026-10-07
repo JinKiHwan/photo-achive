@@ -186,6 +186,12 @@ export async function deleteSession(id: string): Promise<void> {
           await batch.commit();
         }
       }
+      const commentDocs = await getDocs(collection(db, "sessions", id, "comments"));
+      for (let i = 0; i < commentDocs.docs.length; i += 400) {
+        const batch = writeBatch(db);
+        commentDocs.docs.slice(i, i + 400).forEach(comment => batch.delete(comment.ref));
+        await batch.commit();
+      }
       await deleteDoc(target);
       return;
     } catch (err) {
@@ -259,6 +265,13 @@ export async function uploadPhotoImages(
 export async function fetchOwnedSessions(ownerId: string): Promise<PhotoSession[]> {
   if (!db) throw new Error("회원 데이터에 연결할 수 없습니다.");
   const snapshot = await getDocs(query(collection(db, "sessions"), where("ownerId", "==", ownerId)));
+  const sessions = await Promise.all(snapshot.docs.map(item => hydrateSession({ ...item.data(), id: item.id } as PhotoSession)));
+  return sessions.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
+
+export async function fetchPublicSessionsByOwner(ownerId: string): Promise<PhotoSession[]> {
+  if (!db) throw new Error("사진집 데이터에 연결할 수 없습니다.");
+  const snapshot = await getDocs(query(collection(db, "sessions"), where("ownerId", "==", ownerId), where("isPublished", "==", true)));
   const sessions = await Promise.all(snapshot.docs.map(item => hydrateSession({ ...item.data(), id: item.id } as PhotoSession)));
   return sessions.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }

@@ -6,7 +6,7 @@ function loadDb() {
  const calls=[];
  const current={id:'post',slug:'post',ownerId:'alice',shareLocation:false,isPublished:false,photos:[],title:'사진',description:'기록',location:'위치 비공개',date:'2026-10-04',createdAt:'2026-10-04T00:00:00Z'};
  const photo={id:'photo_0',order:0,gps:null,urls:{medium:'url'}};
- const entries=new Map([['sessions/post',current],['sessions/post/photos/photo_0',photo]]);
+ const entries=new Map([['sessions/post',current],['sessions/post/photos/photo_0',photo],['sessions/post/comments/comment_0',{id:'comment_0'}]]);
  const privacy={};new Function('exports',ts.transpileModule(fs.readFileSync('src/lib/session-privacy.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(privacy);
  const sdk={
   doc:(_db,...parts)=>parts.join('/'),collection:(_db,...parts)=>parts.join('/'),where:(...args)=>args,orderBy:(...args)=>args,
@@ -48,7 +48,7 @@ test('member read restores photo arrays while legacy save keeps the existing sch
 test('deleting a member post removes files and child documents before its parent',async()=>{
  const {api,calls}=loadDb();await api.deleteSession('post');
  const actions=calls.filter(item=>item[0]!=='query');
- assert.deepEqual(actions,[['delete-tree','members/alice/sessions/post'],['batch-delete','sessions/post/photos/photo_0'],'commit',['delete','sessions/post']]);
+ assert.deepEqual(actions,[['delete-tree','members/alice/sessions/post'],['batch-delete','sessions/post/photos/photo_0'],'commit',['batch-delete','sessions/post/comments/comment_0'],'commit',['delete','sessions/post']]);
 });
 test('client deletion refuses another member before touching any file',async()=>{
  const {api,calls,entries,current}=loadDb();entries.set('sessions/post',{...current,ownerId:'bob'});

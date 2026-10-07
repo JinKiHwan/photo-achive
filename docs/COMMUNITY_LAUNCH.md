@@ -6,12 +6,50 @@
 
 회원 공개 전에 서비스명, 운영자 이름, 문의 이메일, 개인정보처리방침의 처리위탁·국외 이전·로그/백업 보관 항목을 확정해야 합니다. `/privacy`와 `/terms`는 실제 구현에 맞춘 검토용 초안이며 법률 검토가 끝난 문서가 아닙니다.
 
+## 2026-10-07 구현 업데이트
+
+### 공개 프로필
+
+- `/my`에서 활동 이름, 소개, 현재 Google 프로필 사진 공개 여부를 저장한다.
+- `/profiles/{uid}`는 공개 프로필과 `ownerId`가 일치하는 공개 사진집만 불러온다.
+- 프로필 문서에는 이메일이나 권한 값을 저장하지 않는다.
+- 프로필 사진은 UI에서는 현재 로그인한 Google 계정 사진만 선택할 수 있고, Firestore 규칙에서도 빈 값 또는 `lh3.googleusercontent.com` URL만 허용한다.
+- 회원 기능이 비활성화된 동안에는 프로필 편집 UI를 표시하지 않는다.
+
+### 댓글
+
+- 공개 게시물의 댓글은 로그인 없이 읽을 수 있다.
+- 댓글 작성은 회원 기능이 활성화된 상태에서 가입을 완료한 Google 회원만 가능하다.
+- 본문은 공백 제거 후 1~500자로 제한하며 작성자·부모 게시글·작성 시각은 수정할 수 없다.
+- 댓글 작성자는 본인 댓글을 수정·삭제할 수 있고, 게시글 작성자와 관리자는 게시글 정리를 위해 댓글을 조회·삭제할 수 있다.
+- 비공개 게시물의 댓글은 댓글 작성자, 게시글 작성자와 관리자만 조회할 수 있다.
+
+### 삭제 정합성
+
+- 게시글 삭제는 사진 파일 → 사진 메타데이터 → 댓글 → 부모 게시글 순으로 정리한다.
+- 회원 탈퇴는 본인 게시글 정리 후 공개 프로필과 다른 게시글에 작성한 댓글까지 삭제한다.
+- Firestore는 부모 문서를 삭제해도 하위 컬렉션을 자동 삭제하지 않으므로 댓글 삭제 단계를 별도로 유지한다.
+- 탈퇴 시 `collectionGroup("comments")`와 `authorId == 현재 UID` 조건을 사용하며, 이를 위한 컬렉션 그룹 인덱스를 `firestore.indexes.json`에 추가했다.
+
+### 이번 변경의 주요 파일
+
+| 범위 | 파일 |
+| --- | --- |
+| 프로필 데이터 | `src/lib/profiles.ts`, `src/types/index.ts` |
+| 프로필 화면 | `src/components/profile/ProfileEditor.tsx`, `src/components/profile/PublicProfileView.tsx`, `src/app/profiles/[uid]/page.tsx` |
+| 댓글 | `src/lib/comments.ts`, `src/components/social/CommentsPanel.tsx` |
+| 게시글·탈퇴 정리 | `src/lib/db.ts`, `src/lib/membership.ts` |
+| 보안·인덱스 | `firestore.rules`, `firestore.indexes.json`, `tests/security/rules.test.cjs` |
+| 정책 문구 | `src/app/privacy/page.tsx`, `src/app/terms/page.tsx` |
+
 ## 구현된 동작
 
 - `/login`: Google 로그인, 만 14세 이상 및 이용약관 동의/개인정보처리방침 확인. 기존 이메일 관리자 로그인은 `/admin/login`.
 - `/my`, `/my/new`, `/my/[id]/edit`: 내 사진집만 조회·수정·삭제. 새 글은 비공개이고 위치 공유가 기본 해제. 글당 12장(현재 UI/부모 문서 제한).
 - 위치 공유 해제: 저장 전에 대표 좌표, 사진 GPS, 구조화된 장소명 제거. 저장 후 복구하려면 사용자가 위치를 다시 입력해야 함. 본문/캡션·이미지 안의 위치 문구는 자동 제거하지 않음. 원본 파일은 전송하지 않고 EXIF 보존을 끈 WebP 파일 3종만 저장.
-- `/my` 탈퇴: Google 재인증 → deleting 상태 → 모든 소유 글의 사진 파일/사진 메타데이터/본문 삭제 → 미완성 업로드까지 회원 폴더 정리 → 본인의 신고/회원 확인 기록 삭제 → Firebase Auth 계정 삭제. 실패 시 계정은 마지막까지 유지하므로 재실행 가능. 관리자 계정은 이 경로로 삭제하지 않음.
+- `/my` 공개 프로필: 활동 이름(1~40자), 소개(최대 300자), Google 프로필 사진 공개 여부를 설정. 이메일은 공개 데이터에 저장하지 않음. `/profiles/{uid}`는 프로필과 공개 사진집만 표시.
+- 공개 글 댓글: 비회원도 열람 가능, 가입을 완료한 Google 회원만 1~500자로 작성. 작성자는 수정·삭제, 게시글 작성자와 관리자는 삭제 가능.
+- `/my` 탈퇴: Google 재인증 → deleting 상태 → 모든 소유 글의 사진 파일/사진 메타데이터/본문·댓글 삭제 → 미완성 업로드까지 회원 폴더 정리 → 공개 프로필·다른 글에 작성한 댓글·본인의 신고/회원 확인 기록 삭제 → Firebase Auth 계정 삭제. 실패 시 계정은 마지막까지 유지하므로 재실행 가능. 관리자 계정은 이 경로로 삭제하지 않음.
 - 글보기 신고 → `/admin/reports`에서 신고 검토 및 처리 완료. 게시물 비공개/삭제는 기존 관리 화면 사용. 신고자는 신고를 제출할 때만 본인 UID가 저장되며 일반 회원에게 신고 내역은 공개되지 않음.
 
 ## 데이터와 접근 권한
@@ -21,6 +59,8 @@
 - 회원 사진 메타데이터: `sessions/{id}/photos/{photoId}`. 읽을 때 기존 PhotoSession 형식으로 복원. 사진별 문서 분리는 12장의 상세 검증을 한 요청의 1000-expression 한도 안에서 처리하기 위한 변경.
 - 회원 사진 파일: `members/{uid}/sessions/{id}/{photoId}/*.webp`. 자기 경로만 업로드 가능. 본인·관리자만 폴더 열거/삭제 가능.
 - `members/{uid}`: policyVersion, acceptedAt, deleting. 본인만 읽기 가능. 이메일·Google 프로필을 이 공개 Firestore 데이터에 복제하지 않음. 관리자 판별은 기존 고정 UID 사용, 회원 문서의 역할 필드는 허용하지 않음.
+- `publicProfiles/{uid}`: uid, 활동 이름, 소개, 선택한 HTTPS 프로필 사진 URL, 서버 작성·수정 시각. 공개 읽기 가능, 본인만 생성·수정, 본인·관리자만 삭제.
+- `sessions/{id}/comments/{commentId}`: 댓글 ID, 부모 글 ID, 작성자 UID, 본문, 서버 작성·수정 시각. 공개 글 아래에서만 공개 읽기·작성·수정 가능. 회원 탈퇴용 컬렉션 그룹 조회는 본인의 authorId 동등 조건으로만 허용.
 - `reports/{uid}_{sessionId}`: 신고자/관리자만 접근, 관리자만 상태 변경. 글당 회원 1회 신고.
 - `config/community`: `enabled`를 Console에서 관리. 클라이언트에서 변경 불가. 문서가 없거나 false면 일반 회원 생성·게시·업로드 차단, 기존 데이터 조회/삭제는 계속 가능.
 - 일반 공개 목록은 isPublished 필터, 내 사진 목록은 ownerId 필터. 위치 비공개 공개 사진 하위 문서는 gps == null 필터로 조회.
@@ -36,7 +76,7 @@ Firebase 다운로드 토큰 URL은 주소를 아는 사람에게 접근 권한�
 1. 운영자 정보와 개인정보처리방침 초안 확정. 특히 외부 지도/주소 검색(Nominatim), 날씨(Open-Meteo), 지도 타일(OpenStreetMap), 외부 폰트 및 Firebase 제품별 처리 주체·국가·기간을 실제 계약/배포 설정으로 확인. 위치정보법 적용 여부도 실제 기능 기준으로 검토.
 2. 기존 Firebase 프로젝트와 Storage 위치 확인. 새 프로젝트를 임의 생성하지 않음.
 3. Firebase Authentication에서 Google provider를 켜고 프로젝트 지원 이메일을 설정. Authentication > Settings > Authorized domains에 실제 도메인 추가. OAuth 브랜드/지원 연락처/홈페이지/개인정보처리방침 URL 설정. 소셜 로그인은 현재 Google만 구현; 카카오·네이버 등은 아직 미구현.
-4. 로컬 검증: Java 21 이상, `npm ci`, `npm test`, `npm run test:rules`, `npx tsc --noEmit`.
+4. 로컬 검증: Java 21 이상, `npm ci`, `npm test`, `npm run test:rules`, `npx tsc --noEmit`, `npm run build`.
 5. 검토된 Firestore/Storage 규칙을 먼저 배포. `config/community`는 아직 false. `firebase deploy --only firestore:rules,firestore:indexes,storage` (이 작업에서는 미실행).
 6. 배포 환경에 아래 변수를 설정하고 재빌드. 약관 문서의 미확정 문구를 실제 내용으로 교체하기 전에는 LEGAL_APPROVED를 true로 설정하지 말 것.
 
@@ -51,15 +91,19 @@ NEXT_PUBLIC_MEMBERSHIP_ENABLED=true
 7. Console에서 `config/community` 문서를 생성하고 `enabled: true`로 변경. 기존 `NEXT_PUBLIC_ADMIN_UID`와 두 rules 파일의 관리자 UID가 일치하는지 확인.
 8. 운영자가 별도 테스트 계정으로 로그인 → 가입 → 비공개 글 저장 → 다른 계정 접근 거절 → 위치 공개/비공개 → 게시 → 신고 → 삭제·탈퇴를 직접 확인. 실제 계정 생성·탈퇴·실서비스 게시 작업은 자동 테스트에서 수행하지 않았음.
 
+추가로 프로필 생성·수정·삭제, 댓글 작성·수정·삭제, 게시글 작성자의 댓글 삭제, 비공개 전환 후 댓글 접근, 댓글을 작성한 계정의 탈퇴까지 두 개 이상의 테스트 계정으로 확인한다.
+
 ## 검증 결과
 
-- 일반 테스트 33개 통과 (기존 기능, 좌표 제거, 좋아요 식별, 주변 출사 정렬 회귀 포함).
-- 로컬 Firestore/Storage 에뮬레이터 보안 테스트 14개 통과.
+- 일반 테스트 35개 통과 (댓글 쓰기 검증, 탈퇴 정리, 기존 기능, 좌표 제거, 좋아요 식별, 주변 출사 정렬 회귀 포함).
+- 기존 로컬 Firestore/Storage 에뮬레이터 보안 테스트 14개는 이전 검증에서 통과. 공개 프로필·댓글까지 26개로 확장한 현재 파일은 규칙 컴파일 dry run과 문법 검사를 통과했지만, 이 환경에 Java가 없어 전체 에뮬레이터 재실행은 남아 있음.
   - 비로그인 전체 조회 및 비공개 글 읽기 거절, 공개 필터 조회 허용.
   - 소유자 필터 조회 허용, 타인 수정·삭제/소유권 위조/기존 관리자 글 탈취 거절.
   - 사진 12개 개별 문서 일괄 저장 허용; 사진 캡션 길이·타입·URL/경로 위조 거절.
   - 비공개 위치의 중첩 GPS 저장 거절.
   - 회원 정보 타인/관리자 읽기·임의 역할 추가 거절.
+  - 공개 프로필의 이메일·역할 등 임의 필드, 타인 쓰기, 크기·타입·시각 위조 거절.
+  - 댓글의 작성자 위조, 타인 수정·삭제, 비공개 글 읽기, 조건 없는 탈퇴용 전체 댓글 조회 거절.
   - 문서 생성/수정 양쪽의 필수 필드·타입·길이·불변 값 검증.
   - 오픈 게이트 종료 및 탈퇴 진행 시 새 쓰기 거절, 소유자 삭제 허용.
   - 신고 중복/타인 조회/회원의 신고 완료 처리 거절.

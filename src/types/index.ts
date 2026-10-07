@@ -64,6 +64,24 @@ export interface PhotoSession {
   updatedAt: string;
 }
 
+export interface PublicProfile {
+  uid: string;
+  displayName: string;
+  bio: string;
+  photoURL: string;
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
+export interface PhotoComment {
+  id: string;
+  sessionId: string;
+  authorId: string;
+  body: string;
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
 export interface CompressionProgress {
   fileName: string;
   stage: 'queued' | 'resizing' | 'uploading' | 'completed' | 'error';

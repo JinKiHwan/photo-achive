@@ -8,11 +8,11 @@ function load(overrides={}) {
  const modules={
   'firebase/auth':{GoogleAuthProvider:class {},reauthenticateWithPopup:async()=>calls.push('reauth'),deleteUser:async()=>calls.push('delete-auth')},
   'firebase/firestore':{
-   doc:(_db,...parts)=>parts.join('/'),collection:(_db,...parts)=>parts.join('/'),query:(ref)=>ref,where:()=>null,
+   doc:(_db,...parts)=>parts.join('/'),collection:(_db,...parts)=>parts.join('/'),collectionGroup:(_db,name)=>`group:${name}`,query:(ref)=>ref,where:()=>null,
    getDoc:async()=>({exists:()=>true,data:()=>({deleting:false,policyVersion:'2026-10-04'})}),
    setDoc:async(path,data)=>calls.push(['set',path,data]), deleteDoc:async(path)=>calls.push(['delete-doc',path]),
-   getDocs:async()=>({docs:[{ref:'reports/alice_post'}]}),serverTimestamp:()=> 'server-time',
-   writeBatch:()=>({delete:path=>calls.push(['delete-report',path]),commit:async()=>calls.push('commit')})
+   getDocs:async ref=>({docs:ref==='group:comments'?[{ref:'sessions/other/comments/comment_1'}]:[{ref:'reports/alice_post'}]}),serverTimestamp:()=> 'server-time',
+   writeBatch:()=>({delete:path=>calls.push(['delete-batch',path]),commit:async()=>calls.push('commit')})
   },
   'firebase/storage':{ref:(_storage,path)=>path},
   './firebase':{auth:{currentUser:user},db:{},storage:{}},
@@ -26,7 +26,7 @@ function load(overrides={}) {
 }
 test('withdrawal verifies identity, freezes writes and deletes data before the auth account',async()=>{
  const {api,calls}=load();await api.withdrawMembership();
- assert.deepEqual(calls,[ 'reauth',['set','members/alice',{deleting:true}],['delete-session','post'],['delete-storage','members/alice'],['delete-report','reports/alice_post'],'commit',['delete-doc','members/alice'],'delete-auth']);
+ assert.deepEqual(calls,[ 'reauth',['set','members/alice',{deleting:true}],['delete-session','post'],['delete-storage','members/alice'],['delete-doc','publicProfiles/alice'],['delete-batch','sessions/other/comments/comment_1'],'commit',['delete-batch','reports/alice_post'],'commit',['delete-doc','members/alice'],'delete-auth']);
 });
 test('failed reauthentication performs no deletion',async()=>{
  const {api,calls}=load({'firebase/auth':{reauthenticateWithPopup:async()=>{throw new Error('cancelled')}}});

@@ -12,6 +12,7 @@ import { formatAperture, formatPhotoFocalLength } from "@/lib/photo-metadata";
 import { isValidGps, viewingPhotoGps } from "@/lib/geo";
 import { PostLikeButton } from "@/components/social/LikeButton";
 import { ReportButton } from "./ReportButton";
+import { CommentsPanel } from "@/components/social/CommentsPanel";
 import { PhotoLocationDialog } from "./PhotoLocationDialog";
 import styles from "./PhotobookViewer.module.css";
 
@@ -192,9 +193,11 @@ export function PhotobookViewer({ session }: { session: PhotoSession }) {
         </div>
         <aside className={styles.story} aria-label="출사 이야기" tabIndex={0}>
           <h1>{session.title}</h1>
+          {session.ownerId && <Link href={`/profiles/${session.ownerId}`} className={styles.authorLink}>사진가 프로필 보기 →</Link>}
           {session.description && <p>{session.description}</p>}
           {session.isPublished && <PostLikeButton sessionId={session.id} />}
           <ReportButton sessionId={session.id} />
+          {session.isPublished && <CommentsPanel sessionId={session.id} />}
         </aside>
         </div>
 

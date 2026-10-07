@@ -1,5 +1,5 @@
 import { GoogleAuthProvider, reauthenticateWithPopup, deleteUser, type User } from "firebase/auth";
-import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
+import { collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, where, writeBatch } from "firebase/firestore";
 import { ref } from "firebase/storage";
 import { auth, db, storage } from "./firebase";
 import { removeStorageTree } from "./storage-cleanup";
@@ -34,6 +34,13 @@ export async function withdrawMembership() {
   // Rules refuse further writes once deleting is true, including from another tab.
   for (const session of sessions) await deleteSession(session.id);
   await removeStorageTree(ref(storage, `members/${user.uid}`));
+  await deleteDoc(doc(db, "publicProfiles", user.uid));
+  const comments = await getDocs(query(collectionGroup(db, "comments"), where("authorId", "==", user.uid)));
+  for (let i = 0; i < comments.docs.length; i += 400) {
+    const batch = writeBatch(db);
+    comments.docs.slice(i, i + 400).forEach(comment => batch.delete(comment.ref));
+    await batch.commit();
+  }
   const reports = await getDocs(query(collection(db, "reports"), where("reporterId", "==", user.uid)));
   for (let i = 0; i < reports.docs.length; i += 400) {
     const batch = writeBatch(db);
