@@ -146,7 +146,11 @@ service cloud.firestore {
     }
     // Server-owned aggregates and per-post HMAC(IP) votes; never client-readable/writable.
     // likeStats/{sessionId}: count. likeVotes/{sessionId}/voters/{hash}: liked, updatedAt.
-    match /likeStats/{id} { allow read, write: if false; }
+    match /likeStats/{id} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count is int && request.resource.data.count >= 0;
+    }
     match /likeVotes/{id}/{rest=**} { allow read, write: if false; }
     match /config/community { allow get: if true; allow list, write: if false; }
     match /members/{uid} {

@@ -11,7 +11,7 @@ import { LocationPicker } from "./LocationPicker";
 import { saveSession } from "@/lib/db";
 import { PhotoUploader } from "./PhotoUploader";
 import { PhotoSortableList } from "./PhotoSortableList";
-import { Save, ArrowLeft, Globe, EyeOff, Calendar, MapPin, Camera } from "lucide-react";
+import { Save, ArrowLeft, Globe, EyeOff, Calendar, MapPin, Camera, Upload } from "lucide-react";
 
 interface SessionFormProps {
   initialSession?: PhotoSession;
@@ -202,24 +202,51 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, member
         </button>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+          {/* Toggle Switch UI */}
+          <div className="flex items-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900/90 px-3 py-1.5 text-xs font-mono">
+            <span className="text-zinc-400 font-sans text-[11px]">공개 상태</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isPublished}
+              onClick={() => setIsPublished(!isPublished)}
+              className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                isPublished ? "bg-emerald-600" : "bg-zinc-700"
+              }`}
+            >
+              <span className="sr-only">공개 설정 토글</span>
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition duration-200 ease-in-out ${
+                  isPublished ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+            <span className={`font-medium text-xs flex items-center gap-1 min-w-[50px] ${isPublished ? "text-emerald-400" : "text-zinc-400"}`}>
+              {isPublished ? (
+                <>
+                  <Globe className="w-3.5 h-3.5" /> 공개
+                </>
+              ) : (
+                <>
+                  <EyeOff className="w-3.5 h-3.5" /> 비공개
+                </>
+              )}
+            </span>
+          </div>
+
+          {/* Photo Upload Shortcut Button */}
           <button
             type="button"
-            onClick={() => setIsPublished(!isPublished)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono border transition ${
-              isPublished
-                ? "bg-emerald-950/40 border-emerald-700/50 text-emerald-300"
-                : "bg-zinc-800 border-zinc-700 text-zinc-400"
-            }`}
+            onClick={() => {
+              const section = document.getElementById("photo-upload-section");
+              if (section) section.scrollIntoView({ behavior: "smooth" });
+              const fileInput = document.querySelector<HTMLInputElement>("#photo-upload-section input[type='file']");
+              if (fileInput) fileInput.click();
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/80 text-xs font-medium transition"
           >
-            {isPublished ? (
-              <>
-                <Globe className="w-3.5 h-3.5" /> 공개 중
-              </>
-            ) : (
-              <>
-                <EyeOff className="w-3.5 h-3.5" /> 임시 저장 (비공개)
-              </>
-            )}
+            <Upload className="w-4 h-4 text-zinc-300" />
+            <span>사진 업로드</span>
           </button>
 
           <button
@@ -339,7 +366,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({ initialSession, member
       </div>
 
       {/* Photo Upload Section */}
-      <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-6 space-y-6">
+      <div id="photo-upload-section" className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-6 space-y-6">
         <h3 className="font-serif-book text-xl text-zinc-200 border-b border-zinc-800 pb-3">
           2. 사진 일괄 업로드 및 웹 최적화
         </h3>

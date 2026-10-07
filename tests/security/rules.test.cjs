@@ -193,7 +193,8 @@ test('comment authorship cannot be forged and another member cannot write it',as
   await assertFails(setDoc(doc(db('alice'),'sessions/public/comments/path_mismatch'),comment('alice','public','other_id')));
   await seedComment();
   await assertFails(updateDoc(doc(db('bob'),'sessions/public/comments/comment_1'),{body:'탈취',updatedAt:serverTimestamp()}));
-  await assertFails(deleteDoc(doc(db('bob'),'sessions/public/comments/comment_1')));
+  // bob owns sessions/public and may delete comments there by design; use an unrelated member.
+  await assertFails(deleteDoc(doc(db('charlie'),'sessions/public/comments/comment_1')));
   await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(),'sessions/public/comments/guest'),comment('guest','public','guest')));
 });
 test('comment schema, sizes, types, timestamps and immutable fields are enforced',async()=>{

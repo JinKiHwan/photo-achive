@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Camera, Lock, LogOut, Plus, Settings } from "lucide-react";
+import { Camera, Lock, LogOut, Plus, Settings, Upload } from "lucide-react";
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
@@ -12,13 +12,20 @@ export const Header: React.FC = () => {
 
   if (pathname.startsWith("/sessions/")) return null;
 
-  // If on main page, user explicitly requested "헤더는 필요없어"
-  // Provide only a subtle floating admin button on top-right if needed
+  // If on main page, user explicitly requested a photo upload button on top-right
   if (pathname === "/") {
+    const uploadHref = user ? (isAdmin ? "/admin/sessions/new" : "/my/new") : "/login";
     return (
-      <div className="absolute top-6 right-6 z-40">
+      <div className="absolute top-6 right-6 z-40 flex items-center gap-3">
+        <Link
+          href={uploadHref}
+          className="flex items-center gap-1.5 text-xs font-medium text-zinc-900 bg-white hover:bg-zinc-200 px-3.5 py-1.5 rounded-full transition shadow-lg backdrop-blur-md"
+        >
+          <Upload className="w-3.5 h-3.5 text-zinc-900" />
+          <span>사진 업로드</span>
+        </Link>
         {user ? (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Link
               href={isAdmin ? "/admin" : "/my"}
               className="flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-zinc-900/80 backdrop-blur-md border border-zinc-800 px-3 py-1.5 rounded-full transition shadow-lg"
@@ -37,10 +44,11 @@ export const Header: React.FC = () => {
         ) : (
           <Link
             href="/login"
-            className="p-2 rounded-full bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800/80 text-zinc-500 hover:text-zinc-200 transition backdrop-blur-md block"
+            className="flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800/80 px-3 py-1.5 rounded-full transition backdrop-blur-md shadow-lg"
             title="로그인"
           >
             <Lock className="w-3.5 h-3.5" />
+            <span>로그인</span>
           </Link>
         )}
       </div>
